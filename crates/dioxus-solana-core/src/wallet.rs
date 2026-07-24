@@ -53,4 +53,29 @@ mod tests {
         assert_eq!(account.pubkey(), Pubkey::new_from_array([9u8; 32]));
         assert_eq!(account.signer.sign_message(b"hi").await.unwrap(), Signature::from([1u8; 64]));
     }
+
+    struct MockWallet(WalletInfo);
+
+    #[async_trait::async_trait(?Send)]
+    impl Wallet for MockWallet {
+        fn info(&self) -> &WalletInfo {
+            &self.0
+        }
+
+        async fn connect(&self) -> Result<ConnectedAccount, WalletError> {
+            Ok(ConnectedAccount {
+                wallet_name: self.0.name.clone(),
+                signer: Rc::new(MockSigner(Pubkey::new_from_array([9u8; 32]))),
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn wallet_is_object_safe_and_usable() {
+        let info = WalletInfo { name: "MockWallet".into(), icon: None, features: vec![] };
+        let wallet: Rc<dyn Wallet> = Rc::new(MockWallet(info));
+        assert_eq!(wallet.info().name, "MockWallet");
+        let account = wallet.connect().await.unwrap();
+        assert_eq!(account.wallet_name, "MockWallet");
+    }
 }

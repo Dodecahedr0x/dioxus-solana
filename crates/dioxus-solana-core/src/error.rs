@@ -13,12 +13,25 @@ pub enum WalletError {
     Feature(String),
     #[error("javascript error: {0}")]
     Js(String),
+    #[error("codec error: {0}")]
+    Codec(String),
 }
 
 impl WalletError {
     /// Map a JS error `code` (e.g. `4001`) and message onto a typed error.
     pub fn from_js(code: Option<f64>, message: &str) -> Self {
-        if code == Some(4001.0) || message.to_lowercase().contains("reject") {
+        if code == Some(4001.0) {
+            return WalletError::UserRejected;
+        }
+        let lower = message.to_lowercase();
+        const REJECTION_PHRASES: &[&str] = &[
+            "user rejected",
+            "rejected by user",
+            "rejected the request",
+            "user declined",
+            "user denied",
+        ];
+        if REJECTION_PHRASES.iter().any(|p| lower.contains(p)) {
             return WalletError::UserRejected;
         }
         WalletError::Js(message.to_string())
@@ -42,5 +55,11 @@ mod tests {
     #[test]
     fn falls_back_to_js_variant() {
         assert_eq!(WalletError::from_js(None, "boom"), WalletError::Js("boom".into()));
+    }
+
+    #[test]
+    fn does_not_treat_unrelated_rejection_mentions_as_user_rejection() {
+        let message = "transaction rejected by validator: blockhash not found";
+        assert_eq!(WalletError::from_js(None, message), WalletError::Js(message.into()));
     }
 }

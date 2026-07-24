@@ -5,19 +5,19 @@ use solana_transaction::versioned::VersionedTransaction;
 
 /// Serialize a versioned transaction to bincode bytes (wire format wallets expect).
 pub fn serialize_transaction(tx: &VersionedTransaction) -> Result<Vec<u8>, WalletError> {
-    bincode::serialize(tx).map_err(|e| WalletError::Js(format!("serialize tx: {e}")))
+    bincode::serialize(tx).map_err(|e| WalletError::Codec(format!("serialize tx: {e}")))
 }
 
 /// Deserialize bincode bytes back into a versioned transaction.
 pub fn deserialize_transaction(bytes: &[u8]) -> Result<VersionedTransaction, WalletError> {
-    bincode::deserialize(bytes).map_err(|e| WalletError::Js(format!("deserialize tx: {e}")))
+    bincode::deserialize(bytes).map_err(|e| WalletError::Codec(format!("deserialize tx: {e}")))
 }
 
 /// Build a `Signature` from exactly 64 bytes.
 pub fn signature_from_slice(bytes: &[u8]) -> Result<Signature, WalletError> {
     let arr: [u8; 64] = bytes
         .try_into()
-        .map_err(|_| WalletError::Js(format!("expected 64-byte signature, got {}", bytes.len())))?;
+        .map_err(|_| WalletError::Codec(format!("expected 64-byte signature, got {}", bytes.len())))?;
     Ok(Signature::from(arr))
 }
 
@@ -25,7 +25,7 @@ pub fn signature_from_slice(bytes: &[u8]) -> Result<Signature, WalletError> {
 pub fn pubkey_from_slice(bytes: &[u8]) -> Result<Pubkey, WalletError> {
     let arr: [u8; 32] = bytes
         .try_into()
-        .map_err(|_| WalletError::Js(format!("expected 32-byte pubkey, got {}", bytes.len())))?;
+        .map_err(|_| WalletError::Codec(format!("expected 32-byte pubkey, got {}", bytes.len())))?;
     Ok(Pubkey::new_from_array(arr))
 }
 

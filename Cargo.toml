@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/*"] # examples/* added in a later task (no example crate exists yet)
+members = ["crates/*", "examples/*"]
 
 [workspace.package]
 edition = "2021"

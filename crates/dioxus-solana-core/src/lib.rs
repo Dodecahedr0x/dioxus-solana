@@ -1,2 +1,3 @@
 // crates/dioxus-solana-core/src/lib.rs
-// (empty for now)
+mod cluster;
+pub use cluster::Cluster;

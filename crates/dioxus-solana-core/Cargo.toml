@@ -1,0 +1,14 @@
+[package]
+name = "dioxus-solana-core"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+solana-pubkey.workspace = true
+solana-signature.workspace = true
+solana-transaction.workspace = true
+solana-message.workspace = true
+bincode.workspace = true
+async-trait.workspace = true
+thiserror.workspace = true

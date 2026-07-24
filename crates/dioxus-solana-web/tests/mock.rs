@@ -8,7 +8,11 @@ pub fn make_mock_wallet() -> JsValue {
     let wallet = Object::new();
     set(&wallet, "version", &"1.0.0".into());
     set(&wallet, "name", &"MockWallet".into());
-    set(&wallet, "icon", &"data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=".into());
+    set(
+        &wallet,
+        "icon",
+        &"data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=".into(),
+    );
 
     let chains = Array::new();
     chains.push(&"solana:devnet".into());
@@ -16,7 +20,11 @@ pub fn make_mock_wallet() -> JsValue {
 
     // account { address, publicKey: Uint8Array(32 x 0x09), chains, features }
     let account = Object::new();
-    set(&account, "address", &"11111111111111111111111111111111".into());
+    set(
+        &account,
+        "address",
+        &"11111111111111111111111111111111".into(),
+    );
     let pk = Uint8Array::new_with_length(32);
     pk.fill(9, 0, 32);
     set(&account, "publicKey", &pk);
@@ -57,7 +65,11 @@ pub fn make_featureless_wallet() -> JsValue {
     set(&wallet, "chains", &chains);
 
     let account = Object::new();
-    set(&account, "address", &"11111111111111111111111111111111".into());
+    set(
+        &account,
+        "address",
+        &"11111111111111111111111111111111".into(),
+    );
     let pk = Uint8Array::new_with_length(32);
     pk.fill(9, 0, 32);
     set(&account, "publicKey", &pk);
@@ -166,6 +178,12 @@ mod tests {
     #[wasm_bindgen_test]
     fn mock_wallet_has_expected_shape() {
         let w = make_mock_wallet();
-        assert_eq!(js_sys::Reflect::get(&w, &"name".into()).unwrap().as_string().unwrap(), "MockWallet");
+        assert_eq!(
+            js_sys::Reflect::get(&w, &"name".into())
+                .unwrap()
+                .as_string()
+                .unwrap(),
+            "MockWallet"
+        );
     }
 }

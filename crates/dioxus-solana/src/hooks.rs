@@ -14,7 +14,9 @@ pub struct WalletHandle {
 
 /// Access wallet state + actions from any descendant of `WalletProvider`.
 pub fn use_wallet() -> WalletHandle {
-    WalletHandle { ctx: use_context::<WalletContext>() }
+    WalletHandle {
+        ctx: use_context::<WalletContext>(),
+    }
 }
 
 impl WalletHandle {
@@ -27,7 +29,10 @@ impl WalletHandle {
     }
 
     pub fn wallets(&self) -> Vec<WalletInfo> {
-        (self.ctx.wallets)().iter().map(|w| w.info().clone()).collect()
+        (self.ctx.wallets)()
+            .iter()
+            .map(|w| w.info().clone())
+            .collect()
     }
 
     pub fn cluster(&self) -> dioxus_solana_core::Cluster {
@@ -75,7 +80,10 @@ impl WalletHandle {
         }
     }
 
-    pub async fn sign_transaction(&self, tx: VersionedTransaction) -> Result<VersionedTransaction, WalletError> {
+    pub async fn sign_transaction(
+        &self,
+        tx: VersionedTransaction,
+    ) -> Result<VersionedTransaction, WalletError> {
         match (self.ctx.state)() {
             WalletState::Connected(acc) => acc.signer.sign_transaction(tx).await,
             _ => Err(WalletError::Disconnected),

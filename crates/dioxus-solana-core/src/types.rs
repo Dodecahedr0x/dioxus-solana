@@ -53,10 +53,16 @@ mod tests {
         async fn sign_message(&self, _m: &[u8]) -> Result<Signature, WalletError> {
             Ok(Signature::from([1u8; 64]))
         }
-        async fn sign_transaction(&self, tx: VersionedTransaction) -> Result<VersionedTransaction, WalletError> {
+        async fn sign_transaction(
+            &self,
+            tx: VersionedTransaction,
+        ) -> Result<VersionedTransaction, WalletError> {
             Ok(tx)
         }
-        async fn sign_and_send_transaction(&self, _tx: VersionedTransaction) -> Result<Signature, WalletError> {
+        async fn sign_and_send_transaction(
+            &self,
+            _tx: VersionedTransaction,
+        ) -> Result<Signature, WalletError> {
             Ok(Signature::from([2u8; 64]))
         }
         async fn disconnect(&self) -> Result<(), WalletError> {

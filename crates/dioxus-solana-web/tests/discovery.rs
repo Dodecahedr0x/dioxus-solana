@@ -16,11 +16,15 @@ async fn app_ready_dispatch_registers_a_listening_wallet() {
     let wallet = mock::make_mock_wallet();
     let cb = Closure::<dyn FnMut(web_sys::CustomEvent)>::new(move |e: web_sys::CustomEvent| {
         let api = e.detail();
-        let register: Function = Reflect::get(&api, &"register".into()).unwrap().dyn_into().unwrap();
+        let register: Function = Reflect::get(&api, &"register".into())
+            .unwrap()
+            .dyn_into()
+            .unwrap();
         register.call1(&api, &wallet).unwrap();
     });
     let win = web_sys::window().unwrap();
-    win.add_event_listener_with_callback("wallet-standard:app-ready", cb.as_ref().unchecked_ref()).unwrap();
+    win.add_event_listener_with_callback("wallet-standard:app-ready", cb.as_ref().unchecked_ref())
+        .unwrap();
     cb.forget();
 
     let registry = WalletRegistry::new(Cluster::Devnet);
@@ -39,14 +43,20 @@ async fn register_wallet_dispatch_is_answered_with_the_app_api() {
     registry.discover();
 
     let cb = Closure::<dyn FnMut(JsValue)>::new(move |api: JsValue| {
-        let register: Function = Reflect::get(&api, &"register".into()).unwrap().dyn_into().unwrap();
-        register.call1(&JsValue::NULL, &mock::make_mock_wallet()).unwrap();
+        let register: Function = Reflect::get(&api, &"register".into())
+            .unwrap()
+            .dyn_into()
+            .unwrap();
+        register
+            .call1(&JsValue::NULL, &mock::make_mock_wallet())
+            .unwrap();
     });
 
     let init = web_sys::CustomEventInit::new();
     init.set_detail(cb.as_ref());
-    let event = web_sys::CustomEvent::new_with_event_init_dict("wallet-standard:register-wallet", &init)
-        .expect("construct register-wallet");
+    let event =
+        web_sys::CustomEvent::new_with_event_init_dict("wallet-standard:register-wallet", &init)
+            .expect("construct register-wallet");
     let win = web_sys::window().unwrap();
     let _ = win.dispatch_event(&event);
     cb.forget();

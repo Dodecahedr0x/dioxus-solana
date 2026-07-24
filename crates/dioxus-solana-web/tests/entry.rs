@@ -14,11 +14,15 @@ fn discover_returns_boxed_trait_objects() {
     let wallet = mock::make_mock_wallet();
     let cb = Closure::<dyn FnMut(web_sys::CustomEvent)>::new(move |e: web_sys::CustomEvent| {
         let api = e.detail();
-        let register: Function = Reflect::get(&api, &"register".into()).unwrap().dyn_into().unwrap();
+        let register: Function = Reflect::get(&api, &"register".into())
+            .unwrap()
+            .dyn_into()
+            .unwrap();
         register.call1(&api, &wallet).unwrap();
     });
     let win = web_sys::window().unwrap();
-    win.add_event_listener_with_callback("wallet-standard:app-ready", cb.as_ref().unchecked_ref()).unwrap();
+    win.add_event_listener_with_callback("wallet-standard:app-ready", cb.as_ref().unchecked_ref())
+        .unwrap();
     cb.forget();
 
     let wallets = dioxus_solana_web::discover(Cluster::Devnet);

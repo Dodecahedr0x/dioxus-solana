@@ -49,20 +49,22 @@ impl WalletRegistry {
 
         // 1. Answer any `register-wallet` events (wallet -> app callback).
         let api_for_listener = api.clone();
-        let listener = EventListener::new(&window, "wallet-standard:register-wallet", move |event| {
-            if let Ok(ce) = event.clone().dyn_into::<web_sys::CustomEvent>() {
-                if let Ok(cb) = ce.detail().dyn_into::<Function>() {
-                    let _ = cb.call1(&JsValue::NULL, &api_for_listener);
+        let listener =
+            EventListener::new(&window, "wallet-standard:register-wallet", move |event| {
+                if let Ok(ce) = event.clone().dyn_into::<web_sys::CustomEvent>() {
+                    if let Ok(cb) = ce.detail().dyn_into::<Function>() {
+                        let _ = cb.call1(&JsValue::NULL, &api_for_listener);
+                    }
                 }
-            }
-        });
+            });
         *self._listener.borrow_mut() = Some(listener);
 
         // 2. Dispatch `app-ready` with our api as detail (app -> wallet).
         let init = web_sys::CustomEventInit::new();
         init.set_detail(&api);
-        let event = web_sys::CustomEvent::new_with_event_init_dict("wallet-standard:app-ready", &init)
-            .expect("construct app-ready");
+        let event =
+            web_sys::CustomEvent::new_with_event_init_dict("wallet-standard:app-ready", &init)
+                .expect("construct app-ready");
         let _ = window.dispatch_event(&event);
     }
 

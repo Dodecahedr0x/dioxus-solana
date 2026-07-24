@@ -15,9 +15,9 @@ pub fn deserialize_transaction(bytes: &[u8]) -> Result<VersionedTransaction, Wal
 
 /// Build a `Signature` from exactly 64 bytes.
 pub fn signature_from_slice(bytes: &[u8]) -> Result<Signature, WalletError> {
-    let arr: [u8; 64] = bytes
-        .try_into()
-        .map_err(|_| WalletError::Codec(format!("expected 64-byte signature, got {}", bytes.len())))?;
+    let arr: [u8; 64] = bytes.try_into().map_err(|_| {
+        WalletError::Codec(format!("expected 64-byte signature, got {}", bytes.len()))
+    })?;
     Ok(Signature::from(arr))
 }
 

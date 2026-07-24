@@ -27,7 +27,11 @@ pub fn WalletProvider(props: WalletProviderProps) -> Element {
     let state = use_signal(WalletState::default);
     let wallets = use_signal(Vec::<Rc<dyn Wallet>>::new);
 
-    let ctx = WalletContext { cluster, state, wallets };
+    let ctx = WalletContext {
+        cluster,
+        state,
+        wallets,
+    };
     use_context_provider(|| ctx);
 
     let autoconnect = props.autoconnect;

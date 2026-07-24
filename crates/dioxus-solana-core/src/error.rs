@@ -44,22 +44,34 @@ mod tests {
 
     #[test]
     fn maps_user_rejection_code() {
-        assert_eq!(WalletError::from_js(Some(4001.0), "User rejected"), WalletError::UserRejected);
+        assert_eq!(
+            WalletError::from_js(Some(4001.0), "User rejected"),
+            WalletError::UserRejected
+        );
     }
 
     #[test]
     fn maps_rejected_by_message() {
-        assert_eq!(WalletError::from_js(None, "Request was rejected by user"), WalletError::UserRejected);
+        assert_eq!(
+            WalletError::from_js(None, "Request was rejected by user"),
+            WalletError::UserRejected
+        );
     }
 
     #[test]
     fn falls_back_to_js_variant() {
-        assert_eq!(WalletError::from_js(None, "boom"), WalletError::Js("boom".into()));
+        assert_eq!(
+            WalletError::from_js(None, "boom"),
+            WalletError::Js("boom".into())
+        );
     }
 
     #[test]
     fn does_not_treat_unrelated_rejection_mentions_as_user_rejection() {
         let message = "transaction rejected by validator: blockhash not found";
-        assert_eq!(WalletError::from_js(None, message), WalletError::Js(message.into()));
+        assert_eq!(
+            WalletError::from_js(None, message),
+            WalletError::Js(message.into())
+        );
     }
 }

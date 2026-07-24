@@ -27,15 +27,26 @@ impl StandardSigner {
             .ok_or_else(|| WalletError::Js("account missing publicKey".into()))?;
         let bytes = Uint8Array::new(&pk).to_vec();
         let pubkey = pubkey_from_slice(&bytes)?;
-        Ok(Self { wallet, account, pubkey, cluster })
+        Ok(Self {
+            wallet,
+            account,
+            pubkey,
+            cluster,
+        })
     }
 
     /// Fetch the callable function for a feature, e.g. ("solana:signMessage", "signMessage").
-    fn feature_fn(&self, namespace: &str, method: &str) -> Result<(JsValue, js_sys::Function), WalletError> {
+    fn feature_fn(
+        &self,
+        namespace: &str,
+        method: &str,
+    ) -> Result<(JsValue, js_sys::Function), WalletError> {
         let features = get(&self.wallet, "features")
             .ok_or_else(|| WalletError::Js("wallet missing features".into()))?;
-        let feature = get(&features, namespace).ok_or_else(|| WalletError::Feature(namespace.into()))?;
-        let f = get_function(&feature, method).ok_or_else(|| WalletError::Feature(namespace.into()))?;
+        let feature =
+            get(&features, namespace).ok_or_else(|| WalletError::Feature(namespace.into()))?;
+        let f =
+            get_function(&feature, method).ok_or_else(|| WalletError::Feature(namespace.into()))?;
         Ok((feature, f))
     }
 }
@@ -51,32 +62,62 @@ impl WalletSigner for StandardSigner {
         let input = Object::new();
         Reflect::set(&input, &"account".into(), &self.account).unwrap();
         Reflect::set(&input, &"message".into(), &Uint8Array::from(msg)).unwrap();
-        let out = await_promise(f.call1(&feature, &input).map_err(|e| crate::js::js_error(&e))?).await?;
+        let out = await_promise(
+            f.call1(&feature, &input)
+                .map_err(|e| crate::js::js_error(&e))?,
+        )
+        .await?;
         // out is an array; first element has `signature: Uint8Array`
         let first = Array::from(&out).get(0);
         let sig = get(&first, "signature").ok_or_else(|| WalletError::Js("no signature".into()))?;
         signature_from_slice(&Uint8Array::new(&sig).to_vec())
     }
 
-    async fn sign_transaction(&self, tx: VersionedTransaction) -> Result<VersionedTransaction, WalletError> {
+    async fn sign_transaction(
+        &self,
+        tx: VersionedTransaction,
+    ) -> Result<VersionedTransaction, WalletError> {
         let (feature, f) = self.feature_fn("solana:signTransaction", "signTransaction")?;
         let input = Object::new();
         Reflect::set(&input, &"account".into(), &self.account).unwrap();
-        Reflect::set(&input, &"transaction".into(), &Uint8Array::from(serialize_transaction(&tx)?.as_slice())).unwrap();
+        Reflect::set(
+            &input,
+            &"transaction".into(),
+            &Uint8Array::from(serialize_transaction(&tx)?.as_slice()),
+        )
+        .unwrap();
         Reflect::set(&input, &"chain".into(), &self.cluster.chain_id().into()).unwrap();
-        let out = await_promise(f.call1(&feature, &input).map_err(|e| crate::js::js_error(&e))?).await?;
+        let out = await_promise(
+            f.call1(&feature, &input)
+                .map_err(|e| crate::js::js_error(&e))?,
+        )
+        .await?;
         let first = Array::from(&out).get(0);
-        let signed = get(&first, "signedTransaction").ok_or_else(|| WalletError::Js("no signedTransaction".into()))?;
+        let signed = get(&first, "signedTransaction")
+            .ok_or_else(|| WalletError::Js("no signedTransaction".into()))?;
         deserialize_transaction(&Uint8Array::new(&signed).to_vec())
     }
 
-    async fn sign_and_send_transaction(&self, tx: VersionedTransaction) -> Result<Signature, WalletError> {
-        let (feature, f) = self.feature_fn("solana:signAndSendTransaction", "signAndSendTransaction")?;
+    async fn sign_and_send_transaction(
+        &self,
+        tx: VersionedTransaction,
+    ) -> Result<Signature, WalletError> {
+        let (feature, f) =
+            self.feature_fn("solana:signAndSendTransaction", "signAndSendTransaction")?;
         let input = Object::new();
         Reflect::set(&input, &"account".into(), &self.account).unwrap();
-        Reflect::set(&input, &"transaction".into(), &Uint8Array::from(serialize_transaction(&tx)?.as_slice())).unwrap();
+        Reflect::set(
+            &input,
+            &"transaction".into(),
+            &Uint8Array::from(serialize_transaction(&tx)?.as_slice()),
+        )
+        .unwrap();
         Reflect::set(&input, &"chain".into(), &self.cluster.chain_id().into()).unwrap();
-        let out = await_promise(f.call1(&feature, &input).map_err(|e| crate::js::js_error(&e))?).await?;
+        let out = await_promise(
+            f.call1(&feature, &input)
+                .map_err(|e| crate::js::js_error(&e))?,
+        )
+        .await?;
         let first = Array::from(&out).get(0);
         let sig = get(&first, "signature").ok_or_else(|| WalletError::Js("no signature".into()))?;
         signature_from_slice(&Uint8Array::new(&sig).to_vec())

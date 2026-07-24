@@ -43,7 +43,10 @@ async fn sign_transaction_round_trips() {
 
 #[wasm_bindgen_test]
 async fn sign_and_send_returns_signature() {
-    let sig = signer().sign_and_send_transaction(VersionedTransaction::default()).await.unwrap();
+    let sig = signer()
+        .sign_and_send_transaction(VersionedTransaction::default())
+        .await
+        .unwrap();
     assert_eq!(sig.as_ref(), &[2u8; 64]);
 }
 
@@ -62,6 +65,9 @@ async fn new_rejects_invalid_pubkey_length() {
 
     match StandardSigner::new(wallet, account.into(), Cluster::Devnet) {
         Err(WalletError::Codec(_)) => {}
-        other => panic!("expected Err(WalletError::Codec(_)), got a different result: is_err={}", other.is_err()),
+        other => panic!(
+            "expected Err(WalletError::Codec(_)), got a different result: is_err={}",
+            other.is_err()
+        ),
     }
 }

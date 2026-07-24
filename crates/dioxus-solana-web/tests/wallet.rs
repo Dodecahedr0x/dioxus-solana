@@ -2,7 +2,7 @@
 #[path = "mock.rs"]
 mod mock;
 
-use dioxus_solana_core::{Cluster, Wallet};
+use dioxus_solana_core::{Cluster, Wallet, WalletError};
 use dioxus_solana_web::wallet::StandardWallet;
 use wasm_bindgen_test::*;
 
@@ -21,4 +21,11 @@ async fn connect_returns_account_with_pubkey() {
     let account = w.connect().await.unwrap();
     assert_eq!(account.wallet_name, "MockWallet");
     assert_eq!(account.pubkey().to_bytes(), [9u8; 32]);
+}
+
+#[wasm_bindgen_test]
+async fn connect_without_feature_errors() {
+    let w = StandardWallet::new(mock::make_featureless_wallet(), Cluster::Devnet);
+    let err = w.connect().await.unwrap_err();
+    assert!(matches!(err, WalletError::Feature(_)));
 }

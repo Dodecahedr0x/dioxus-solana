@@ -12,6 +12,8 @@ pub struct WalletRegistry {
     cluster: Cluster,
     raw: Rc<RefCell<Vec<JsValue>>>,
     _listener: Rc<RefCell<Option<EventListener>>>,
+    #[allow(clippy::type_complexity)]
+    _register_cb: RefCell<Option<Closure<dyn FnMut(JsValue)>>>,
 }
 
 impl WalletRegistry {
@@ -20,25 +22,30 @@ impl WalletRegistry {
             cluster,
             raw: Rc::new(RefCell::new(Vec::new())),
             _listener: Rc::new(RefCell::new(None)),
+            _register_cb: RefCell::new(None),
         }
     }
 
     /// Build the app-side `{ register(...wallets) }` API object.
-    fn make_api(raw: Rc<RefCell<Vec<JsValue>>>) -> Object {
+    ///
+    /// Returns the object alongside the backing `Closure` so the caller can
+    /// keep it alive for as long as the API object may be invoked (instead
+    /// of leaking it via `.forget()`).
+    fn make_api(raw: Rc<RefCell<Vec<JsValue>>>) -> (Object, Closure<dyn FnMut(JsValue)>) {
         let api = Object::new();
         let register = Closure::<dyn FnMut(JsValue)>::new(move |wallet: JsValue| {
             raw.borrow_mut().push(wallet);
         });
         // NOTE: wallets call register(wallet) with a single arg in practice.
         Reflect::set(&api, &"register".into(), register.as_ref().unchecked_ref()).unwrap();
-        register.forget();
-        api
+        (api, register)
     }
 
     /// Run the handshake: listen for late registrations, then dispatch app-ready.
     pub fn discover(&self) {
         let window = web_sys::window().expect("no window");
-        let api = Self::make_api(self.raw.clone());
+        let (api, cb) = Self::make_api(self.raw.clone());
+        *self._register_cb.borrow_mut() = Some(cb);
 
         // 1. Answer any `register-wallet` events (wallet -> app callback).
         let api_for_listener = api.clone();

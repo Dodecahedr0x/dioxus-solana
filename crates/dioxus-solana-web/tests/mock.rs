@@ -40,6 +40,40 @@ pub fn make_mock_wallet() -> JsValue {
     wallet.into()
 }
 
+/// Build a mock Wallet-Standard wallet object with name "BareWallet", one
+/// account (pubkey = 32 bytes of `0x09`), and an EMPTY features record — for
+/// exercising the missing-feature error paths.
+///
+/// Unused when this file is compiled as its own `tests/mock.rs` binary (it's
+/// only consumed by the other test files via `#[path = "mock.rs"]`).
+#[allow(dead_code)]
+pub fn make_featureless_wallet() -> JsValue {
+    let wallet = Object::new();
+    set(&wallet, "version", &"1.0.0".into());
+    set(&wallet, "name", &"BareWallet".into());
+
+    let chains = Array::new();
+    chains.push(&"solana:devnet".into());
+    set(&wallet, "chains", &chains);
+
+    let account = Object::new();
+    set(&account, "address", &"11111111111111111111111111111111".into());
+    let pk = Uint8Array::new_with_length(32);
+    pk.fill(9, 0, 32);
+    set(&account, "publicKey", &pk);
+    let acc_chains = Array::new();
+    acc_chains.push(&"solana:devnet".into());
+    set(&account, "chains", &acc_chains);
+    set(&account, "features", &Array::new());
+    let accounts = Array::new();
+    accounts.push(&account);
+    set(&wallet, "accounts", &accounts);
+
+    set(&wallet, "features", &Object::new());
+
+    wallet.into()
+}
+
 fn set(obj: &Object, key: &str, val: &JsValue) {
     Reflect::set(obj, &key.into(), val).unwrap();
 }

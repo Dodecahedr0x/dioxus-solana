@@ -4,7 +4,9 @@ mod mock;
 
 use dioxus_solana_core::{Cluster, WalletError, WalletSigner};
 use dioxus_solana_web::signer::StandardSigner;
+use js_sys::{Array, Function, Object, Promise, Reflect};
 use solana_transaction::versioned::VersionedTransaction;
+use wasm_bindgen::prelude::*;
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -67,6 +69,39 @@ async fn new_rejects_invalid_pubkey_length() {
         Err(WalletError::Codec(_)) => {}
         other => panic!(
             "expected Err(WalletError::Codec(_)), got a different result: is_err={}",
+            other.is_err()
+        ),
+    }
+}
+
+#[wasm_bindgen_test]
+async fn sign_message_rejects_non_uint8array_signature() {
+    // A non-conformant wallet returns a bogus `signature` (a plain number
+    // instead of a Uint8Array). This must surface as a typed WalletError,
+    // not an unhandled JS exception from `Uint8Array::new`.
+    let wallet = mock::make_mock_wallet();
+    let features = Reflect::get(&wallet, &"features".into()).unwrap();
+    let sign_message_feature = Reflect::get(&features, &"solana:signMessage".into()).unwrap();
+
+    let cb = Closure::<dyn FnMut(JsValue) -> Promise>::new(move |_input: JsValue| {
+        let out = Object::new();
+        Reflect::set(&out, &"signature".into(), &JsValue::from_f64(42.0)).unwrap();
+        let arr = Array::new();
+        arr.push(&out);
+        Promise::resolve(&JsValue::from(arr))
+    });
+    let f: &Function = cb.as_ref().unchecked_ref();
+    Reflect::set(&sign_message_feature, &"signMessage".into(), f).unwrap();
+    cb.forget();
+
+    let account = Reflect::get(&wallet, &"accounts".into()).unwrap();
+    let account = Array::from(&account).get(0);
+    let signer = StandardSigner::new(wallet, account, Cluster::Devnet).unwrap();
+
+    match signer.sign_message(b"x").await {
+        Err(WalletError::Js(_)) => {}
+        other => panic!(
+            "expected Err(WalletError::Js(_)), got a different result: is_err={}",
             other.is_err()
         ),
     }

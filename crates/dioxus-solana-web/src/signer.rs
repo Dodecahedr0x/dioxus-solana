@@ -25,7 +25,7 @@ impl StandardSigner {
     pub fn new(wallet: JsValue, account: JsValue, cluster: Cluster) -> Result<Self, WalletError> {
         let pk = get(&account, "publicKey")
             .ok_or_else(|| WalletError::Js("account missing publicKey".into()))?;
-        let bytes = Uint8Array::new(&pk).to_vec();
+        let bytes = crate::js::as_byte_vec(&pk)?;
         let pubkey = pubkey_from_slice(&bytes)?;
         Ok(Self {
             wallet,
@@ -70,7 +70,7 @@ impl WalletSigner for StandardSigner {
         // out is an array; first element has `signature: Uint8Array`
         let first = Array::from(&out).get(0);
         let sig = get(&first, "signature").ok_or_else(|| WalletError::Js("no signature".into()))?;
-        signature_from_slice(&Uint8Array::new(&sig).to_vec())
+        signature_from_slice(&crate::js::as_byte_vec(&sig)?)
     }
 
     async fn sign_transaction(
@@ -95,7 +95,7 @@ impl WalletSigner for StandardSigner {
         let first = Array::from(&out).get(0);
         let signed = get(&first, "signedTransaction")
             .ok_or_else(|| WalletError::Js("no signedTransaction".into()))?;
-        deserialize_transaction(&Uint8Array::new(&signed).to_vec())
+        deserialize_transaction(&crate::js::as_byte_vec(&signed)?)
     }
 
     async fn sign_and_send_transaction(
@@ -120,7 +120,7 @@ impl WalletSigner for StandardSigner {
         .await?;
         let first = Array::from(&out).get(0);
         let sig = get(&first, "signature").ok_or_else(|| WalletError::Js("no signature".into()))?;
-        signature_from_slice(&Uint8Array::new(&sig).to_vec())
+        signature_from_slice(&crate::js::as_byte_vec(&sig)?)
     }
 
     async fn disconnect(&self) -> Result<(), WalletError> {

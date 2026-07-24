@@ -1,4 +1,4 @@
-use js_sys::{Function, Promise, Reflect};
+use js_sys::{Function, Promise, Reflect, Uint8Array};
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 
@@ -37,4 +37,14 @@ pub fn js_error(value: &JsValue) -> WalletError {
 pub async fn await_promise(value: JsValue) -> Result<JsValue, WalletError> {
     let promise: Promise = value.dyn_into().map_err(|v| js_error(&v))?;
     JsFuture::from(promise).await.map_err(|e| js_error(&e))
+}
+
+/// Extract bytes from a value that MUST be a `Uint8Array` (as the Wallet
+/// Standard specifies for pubkeys/signatures/transactions). Returns a typed
+/// error instead of throwing if a non-conformant wallet returns another shape.
+pub fn as_byte_vec(value: &JsValue) -> Result<Vec<u8>, WalletError> {
+    value
+        .dyn_ref::<Uint8Array>()
+        .map(|a| a.to_vec())
+        .ok_or_else(|| WalletError::Js("expected a Uint8Array from the wallet".into()))
 }

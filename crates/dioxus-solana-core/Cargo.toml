@@ -12,3 +12,6 @@ solana-message.workspace = true
 bincode.workspace = true
 async-trait.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt"] }

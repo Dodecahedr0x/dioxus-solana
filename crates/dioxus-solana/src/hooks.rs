@@ -30,6 +30,10 @@ impl WalletHandle {
         (self.ctx.wallets)().iter().map(|w| w.info().clone()).collect()
     }
 
+    pub fn cluster(&self) -> dioxus_solana_core::Cluster {
+        (self.ctx.cluster)()
+    }
+
     /// Connect a wallet by name (as reported in `wallets()`).
     pub fn connect(&self, name: String) {
         let mut state = self.ctx.state;

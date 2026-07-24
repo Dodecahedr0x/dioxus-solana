@@ -2,7 +2,7 @@ use dioxus_solana_core::{ConnectedAccount, WalletError};
 use solana_pubkey::Pubkey;
 
 /// Reactive connection state held in a Dioxus `Signal`.
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub enum WalletState {
     #[default]
     Disconnected,

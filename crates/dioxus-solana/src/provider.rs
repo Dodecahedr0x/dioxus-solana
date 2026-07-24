@@ -37,6 +37,8 @@ pub fn WalletProvider(props: WalletProviderProps) -> Element {
     // `new_registry` has no side effects; the handshake runs in the effect.
     let registry = use_hook(|| crate::platform::new_registry(props.cluster));
 
+    // Runs exactly once on mount: the body only writes signals (never reactively
+    // reads one), so it is not re-triggered. Do not add a signal read here.
     use_effect(move || {
         let mut wallets = wallets;
         let found = crate::platform::run_discovery(&registry);

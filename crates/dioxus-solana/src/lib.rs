@@ -1,2 +1,7 @@
-// crates/dioxus-solana/src/lib.rs
-// (empty for now)
+mod platform;
+mod state;
+
+pub use dioxus_solana_core::{
+    Cluster, ConnectedAccount, Wallet, WalletError, WalletInfo, WalletSigner,
+};
+pub use state::WalletState;

@@ -12,7 +12,6 @@ repository = "https://github.com/aursen-labs/dioxus-solana"
 solana-pubkey      = ">=3"
 solana-signature   = ">=3"
 solana-transaction = { version = ">=3", features = ["serde"] }
-solana-message     = ">=3"
 bincode            = "1"
 async-trait        = "0.1"
 thiserror          = "2"

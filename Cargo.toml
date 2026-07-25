@@ -24,7 +24,5 @@ web-sys = "0.3"
 gloo-events = "0.3"
 # UI
 dioxus = "0.7"
-# internal — `version` is required for publishing; bump it in lockstep with the
-# crate versions on each release.
-dioxus-solana-core = { path = "crates/dioxus-solana-core" }
-dioxus-solana-web = { path = "crates/dioxus-solana-web" }
+dioxus-solana-core = { path = "crates/dioxus-solana-core", version = "0.1.0" }
+dioxus-solana-web = { path = "crates/dioxus-solana-web", version = "0.1.0" }

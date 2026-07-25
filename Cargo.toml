@@ -3,27 +3,28 @@ resolver = "2"
 members = ["crates/*", "examples/*"]
 
 [workspace.package]
+version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/aursen-labs/dioxus-solana"
 
 [workspace.dependencies]
 # Solana modular crates — floor at v3, no strict pin (cargo resolves 4.x)
-solana-pubkey      = ">=3"
-solana-signature   = ">=3"
+solana-pubkey = ">=3"
+solana-signature = ">=3"
 solana-transaction = { version = ">=3", features = ["serde"] }
-solana-message     = ">=3"
-bincode            = "1"
-async-trait        = "0.1"
-thiserror          = "2"
+bincode = "1"
+async-trait = "0.1"
+thiserror = "2"
 # WASM / web
-wasm-bindgen         = "0.2"
+wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
-js-sys               = "0.3"
-web-sys              = "0.3"
-gloo-events          = "0.3"
+js-sys = "0.3"
+web-sys = "0.3"
+gloo-events = "0.3"
 # UI
 dioxus = "0.7"
-# internal
+# internal — `version` is required for publishing; bump it in lockstep with the
+# crate versions on each release.
 dioxus-solana-core = { path = "crates/dioxus-solana-core" }
-dioxus-solana-web  = { path = "crates/dioxus-solana-web" }
+dioxus-solana-web = { path = "crates/dioxus-solana-web" }

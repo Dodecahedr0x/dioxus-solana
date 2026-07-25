@@ -1,18 +1,26 @@
 [package]
 name = "dioxus-solana"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+description = "Solana wallet connection, signing, and reactive RPC hooks for Dioxus web apps."
+readme = "../../README.md"
+keywords = ["solana", "dioxus", "wallet", "web3", "wasm"]
+categories = ["wasm", "web-programming", "gui"]
 
 [dependencies]
 dioxus-solana-core.workspace = true
+dioxus-solana-web.workspace = true
 dioxus.workspace = true
 solana-pubkey.workspace = true
 solana-transaction.workspace = true
 solana-signature.workspace = true
+futures-util = "0.3"
+serde = "1"
 
+# web-sys (localStorage) only backs the wasm-only `storage` module.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-dioxus-solana-web.workspace = true
 web-sys = { workspace = true, features = ["Window", "Storage"] }
 
 [dev-dependencies]

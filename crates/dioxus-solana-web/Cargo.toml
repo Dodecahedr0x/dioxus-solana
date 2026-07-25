@@ -1,8 +1,10 @@
 [package]
 name = "dioxus-solana-web"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+description = "Browser Wallet Standard + Solana RPC (spume) implementation behind dioxus-solana."
 
 [dependencies]
 dioxus-solana-core.workspace = true
@@ -15,9 +17,34 @@ wasm-bindgen-futures.workspace = true
 js-sys.workspace = true
 gloo-events.workspace = true
 
+# spume (wasm Solana RPC/pubsub) backs the `rpc` module. It compiles (though it
+# does not run) on native too, so the module is not target-gated — this keeps
+# rust-analyzer, which analyzes the host target, working on the RPC code.
+#
+# NOTE: spume pulls solana-rpc-client-types, which enables the shared solana
+# crates' `wincode` feature. solana-message 4.4.0 is still on wincode 0.5, but
+# the default picks of solana-short-vec (3.3.0) / solana-hash (4.6.0) /
+# solana-reward-info (6.3.0) jumped to wincode 0.6 and fail to compile. Cargo.lock
+# pins those three down to their wincode-0.5 releases (3.2.2 / 4.5.0 / 6.2.0).
+# Remove the pins once the solana crates realign on one wincode version.
+spume = { version = "0.3.0", features = ["pubsub"] }
+solana-rpc-client-types = "4.1"
+solana-account-decoder-client-types = "4.1"
+solana-transaction-status-client-types = "4.1"
+solana-epoch-info = "3.1"
+solana-epoch-schedule = "3.2"
+futures-util = "0.3"
+
 [dependencies.web-sys]
 workspace = true
-features = ["Window", "Storage", "CustomEvent", "CustomEventInit", "EventTarget", "Event"]
+features = [
+    "Window",
+    "Storage",
+    "CustomEvent",
+    "CustomEventInit",
+    "EventTarget",
+    "Event",
+]
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

@@ -7,3 +7,10 @@ publish = false
 [dependencies]
 dioxus = { workspace = true, features = ["web"] }
 dioxus-solana = { path = "../../crates/dioxus-solana" }
+# Building the memo transaction (see components::send_memo).
+solana-instruction = "3.4"
+solana-message = "4.4"
+solana-transaction = "4.1"
+solana-hash = "4.5"
+solana-signature = "3.4"
+bs58 = "0.5"

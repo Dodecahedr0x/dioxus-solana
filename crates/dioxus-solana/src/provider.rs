@@ -13,6 +13,9 @@ pub struct WalletContext {
 
 #[derive(Props, Clone, PartialEq)]
 pub struct WalletProviderProps {
+    /// Fallback cluster, used only when no ancestor [`RpcProvider`] provides one.
+    ///
+    /// [`RpcProvider`]: crate::rpc::RpcProvider
     #[props(default = Cluster::MainnetBeta)]
     pub cluster: Cluster,
     #[props(default = true)]
@@ -21,9 +24,20 @@ pub struct WalletProviderProps {
 }
 
 /// Provides wallet context to descendants. Mount once near the app root.
+///
+/// The cluster (which chain wallets sign against) comes from an ancestor
+/// [`RpcProvider`](crate::rpc::RpcProvider) if one is mounted; otherwise it
+/// falls back to the `cluster` prop (default [`Cluster::MainnetBeta`]).
 #[component]
 pub fn WalletProvider(props: WalletProviderProps) -> Element {
-    let cluster = use_signal(|| props.cluster);
+    // Own the fallback so the hook count is stable whether or not an
+    // RpcProvider is present; the ancestor's cluster wins when it is.
+    let fallback = use_signal(move || props.cluster);
+    let cluster = use_hook(|| {
+        try_consume_context::<crate::rpc::RpcContext>()
+            .map(|rpc| rpc.cluster)
+            .unwrap_or(fallback)
+    });
     let state = use_signal(WalletState::default);
     let wallets = use_signal(Vec::<Rc<dyn Wallet>>::new);
 
@@ -39,7 +53,7 @@ pub fn WalletProvider(props: WalletProviderProps) -> Element {
     // Persistent registry: lives for the provider's lifetime so its
     // register-wallet listener/closure aren't dropped after one call.
     // `new_registry` has no side effects; the handshake runs in the effect.
-    let registry = use_hook(|| crate::platform::new_registry(props.cluster));
+    let registry = use_hook(|| crate::platform::new_registry(cluster.peek().clone()));
 
     // Runs exactly once on mount: the body only writes signals (never reactively
     // reads one), so it is not re-triggered. Do not add a signal read here.

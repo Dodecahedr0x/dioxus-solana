@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-solana-web"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -37,7 +37,14 @@ futures-util = "0.3"
 
 [dependencies.web-sys]
 workspace = true
-features = ["Window", "Storage", "CustomEvent", "CustomEventInit", "EventTarget", "Event"]
+features = [
+    "Window",
+    "Storage",
+    "CustomEvent",
+    "CustomEventInit",
+    "EventTarget",
+    "Event",
+]
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

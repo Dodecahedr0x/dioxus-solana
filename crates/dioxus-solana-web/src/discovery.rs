@@ -3,7 +3,7 @@ use js_sys::{Function, Object, Reflect};
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
 
-use dioxus_solana_core::Cluster;
+use dioxus_solana_core::{Cluster, Wallet};
 
 use crate::wallet::StandardWallet;
 
@@ -69,12 +69,18 @@ impl WalletRegistry {
     }
 
     /// Snapshot the currently-registered wallets as core `StandardWallet`s.
+    ///
+    /// A wallet can register twice — once via the `register-wallet` event and
+    /// again in response to our `app-ready` dispatch — so entries are
+    /// deduplicated by name, keeping the first occurrence.
     pub fn wallets(&self) -> Vec<StandardWallet> {
+        let mut seen = std::collections::HashSet::new();
         self.raw
             .borrow()
             .iter()
             .cloned()
-            .map(|raw| StandardWallet::new(raw, self.cluster))
+            .map(|raw| StandardWallet::new(raw, self.cluster.clone()))
+            .filter(|w| seen.insert(w.info().name.clone()))
             .collect()
     }
 }

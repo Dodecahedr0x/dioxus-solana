@@ -6,13 +6,16 @@ license.workspace = true
 
 [dependencies]
 dioxus-solana-core.workspace = true
+dioxus-solana-web.workspace = true
 dioxus.workspace = true
 solana-pubkey.workspace = true
 solana-transaction.workspace = true
 solana-signature.workspace = true
+futures-util = "0.3"
+serde = "1"
 
+# web-sys (localStorage) only backs the wasm-only `storage` module.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-dioxus-solana-web.workspace = true
 web-sys = { workspace = true, features = ["Window", "Storage"] }
 
 [dev-dependencies]

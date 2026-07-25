@@ -59,7 +59,7 @@ impl Wallet for StandardWallet {
         if account.is_undefined() {
             return Err(WalletError::Js("connect returned empty accounts".into()));
         }
-        let signer = StandardSigner::new(self.raw.clone(), account, self.cluster)?;
+        let signer = StandardSigner::new(self.raw.clone(), account, self.cluster.clone())?;
         Ok(ConnectedAccount {
             wallet_name: self.info.name.clone(),
             signer: Rc::new(signer),

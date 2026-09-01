@@ -34,6 +34,10 @@ impl WalletError {
         if REJECTION_PHRASES.iter().any(|p| lower.contains(p)) {
             return WalletError::UserRejected;
         }
+        const NOT_INSTALLED_PHRASES: &[&str] = &["no installed wallet", "wallet not found"];
+        if NOT_INSTALLED_PHRASES.iter().any(|p| lower.contains(p)) {
+            return WalletError::NotInstalled;
+        }
         WalletError::Js(message.to_string())
     }
 }
@@ -72,6 +76,14 @@ mod tests {
         assert_eq!(
             WalletError::from_js(None, message),
             WalletError::Js(message.into())
+        );
+    }
+
+    #[test]
+    fn maps_mwa_wallet_not_found() {
+        assert_eq!(
+            WalletError::from_js(None, "Found no installed wallet that supports MWA"),
+            WalletError::NotInstalled
         );
     }
 }

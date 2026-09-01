@@ -33,3 +33,30 @@ async fn connect_without_feature_errors() {
     let err = w.connect().await.unwrap_err();
     assert!(matches!(err, WalletError::Feature(_)));
 }
+
+#[wasm_bindgen_test]
+async fn connect_passes_silent_false() {
+    let raw = mock::make_recording_wallet();
+    let w = StandardWallet::new(raw.clone(), Cluster::Devnet);
+    w.connect().await.unwrap();
+    let input = js_sys::Reflect::get(&raw, &"lastConnectInput".into()).unwrap();
+    let silent = js_sys::Reflect::get(&input, &"silent".into()).unwrap();
+    assert_eq!(silent.as_bool(), Some(false));
+}
+
+#[wasm_bindgen_test]
+async fn connect_silent_passes_silent_true() {
+    let raw = mock::make_recording_wallet();
+    let w = StandardWallet::new(raw.clone(), Cluster::Devnet);
+    w.connect_silent().await.unwrap();
+    let input = js_sys::Reflect::get(&raw, &"lastConnectInput".into()).unwrap();
+    let silent = js_sys::Reflect::get(&input, &"silent".into()).unwrap();
+    assert_eq!(silent.as_bool(), Some(true));
+}
+
+#[wasm_bindgen_test]
+async fn connect_silent_empty_accounts_is_disconnected() {
+    let w = StandardWallet::new(mock::make_empty_connect_wallet(), Cluster::Devnet);
+    let err = w.connect_silent().await.unwrap_err();
+    assert!(matches!(err, WalletError::Disconnected));
+}

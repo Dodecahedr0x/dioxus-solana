@@ -4,6 +4,32 @@ use std::rc::Rc;
 
 use crate::wallet::WalletSigner;
 
+/// Identity presented to a wallet during Mobile Wallet Adapter authorization.
+///
+/// `icon` must be a **relative** URI (resolved against `uri`). Absolute URLs are
+/// rejected by MWA 2.0 wallets.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AppIdentity {
+    pub name: String,
+    /// Origin of the dapp, e.g. `"https://example.com"`. Empty means "use the
+    /// current page origin" when MWA is registered in the browser.
+    pub uri: String,
+    /// Relative icon path, e.g. `"favicon.ico"`.
+    pub icon: String,
+}
+
+impl AppIdentity {
+    /// Name plus the usual `favicon.ico` icon. The URI is filled from the page
+    /// origin at registration time when left empty.
+    pub fn named(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            uri: String::new(),
+            icon: "favicon.ico".into(),
+        }
+    }
+}
+
 /// Metadata about a discovered wallet (pre-connection), for building a picker UI.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WalletInfo {
@@ -68,6 +94,14 @@ mod tests {
         async fn disconnect(&self) -> Result<(), WalletError> {
             Ok(())
         }
+    }
+
+    #[test]
+    fn named_identity_defaults_icon_and_empty_uri() {
+        let id = AppIdentity::named("Demo");
+        assert_eq!(id.name, "Demo");
+        assert!(id.uri.is_empty());
+        assert_eq!(id.icon, "favicon.ico");
     }
 
     #[test]

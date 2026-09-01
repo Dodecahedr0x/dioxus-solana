@@ -3,13 +3,14 @@ use js_sys::{Function, Object, Reflect};
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
 
-use dioxus_solana_core::{Cluster, Wallet};
+use dioxus_solana_core::{AppIdentity, Cluster, Wallet};
 
 use crate::wallet::StandardWallet;
 
 /// Collects wallets registered through the Wallet Standard window handshake.
 pub struct WalletRegistry {
     cluster: Cluster,
+    identity: Option<AppIdentity>,
     raw: Rc<RefCell<Vec<JsValue>>>,
     _listener: Rc<RefCell<Option<EventListener>>>,
     #[allow(clippy::type_complexity)]
@@ -18,8 +19,13 @@ pub struct WalletRegistry {
 
 impl WalletRegistry {
     pub fn new(cluster: Cluster) -> Self {
+        Self::new_with_identity(cluster, None)
+    }
+
+    pub fn new_with_identity(cluster: Cluster, identity: Option<AppIdentity>) -> Self {
         Self {
             cluster,
+            identity,
             raw: Rc::new(RefCell::new(Vec::new())),
             _listener: Rc::new(RefCell::new(None)),
             _register_cb: RefCell::new(None),
@@ -43,6 +49,7 @@ impl WalletRegistry {
 
     /// Run the handshake: listen for late registrations, then dispatch app-ready.
     pub fn discover(&self) {
+        crate::mwa::register(self.identity.as_ref(), self.cluster.chain_id());
         let window = web_sys::window().expect("no window");
         let (api, cb) = Self::make_api(self.raw.clone());
         *self._register_cb.borrow_mut() = Some(cb);

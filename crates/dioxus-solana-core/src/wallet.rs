@@ -8,6 +8,15 @@ use solana_transaction::versioned::VersionedTransaction;
 pub trait Wallet {
     fn info(&self) -> &WalletInfo;
     async fn connect(&self) -> Result<ConnectedAccount, WalletError>;
+
+    /// Reconnect without prompting the user.
+    ///
+    /// Mobile Wallet Adapter uses this for autoconnect: a cached authorization
+    /// is restored, and if there is none the call returns [`WalletError::Disconnected`]
+    /// instead of opening the wallet. The default forwards to [`Wallet::connect`].
+    async fn connect_silent(&self) -> Result<ConnectedAccount, WalletError> {
+        self.connect().await
+    }
 }
 
 /// An active signing session.
@@ -102,6 +111,18 @@ mod tests {
         let wallet: Rc<dyn Wallet> = Rc::new(MockWallet(info));
         assert_eq!(wallet.info().name, "MockWallet");
         let account = wallet.connect().await.unwrap();
+        assert_eq!(account.wallet_name, "MockWallet");
+    }
+
+    #[tokio::test]
+    async fn connect_silent_defaults_to_connect() {
+        let info = WalletInfo {
+            name: "MockWallet".into(),
+            icon: None,
+            features: vec![],
+        };
+        let wallet: Rc<dyn Wallet> = Rc::new(MockWallet(info));
+        let account = wallet.connect_silent().await.unwrap();
         assert_eq!(account.wallet_name, "MockWallet");
     }
 }

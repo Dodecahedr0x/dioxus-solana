@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_solana::rpc::{use_get_version, use_slot_subscription, RpcProvider};
-use dioxus_solana::{use_wallet, Cluster, WalletProvider, WalletState};
+use dioxus_solana::{use_wallet, AppIdentity, Cluster, WalletProvider, WalletState};
 
 mod components;
 use components::Connected;
@@ -15,7 +15,11 @@ fn Root() -> Element {
         style { dangerous_inner_html: STYLE }
         // RpcProvider owns the cluster (endpoints + chain); WalletProvider reads it.
         RpcProvider { cluster: Cluster::Devnet,
-            WalletProvider { autoconnect: true, Demo {} }
+            WalletProvider {
+                autoconnect: true,
+                app_identity: Some(AppIdentity::named("dioxus-solana demo")),
+                Demo {}
+            }
         }
     }
 }
@@ -90,7 +94,7 @@ fn Demo() -> Element {
                                 }
                             }
                             if wallets.is_empty() {
-                                p { class: "empty", "No wallets detected. Install a Solana wallet extension." }
+                                p { class: "empty", "No wallets detected. On desktop, install a Solana wallet extension. On Android Chrome, Mobile Wallet Adapter appears automatically." }
                             }
                             if let WalletState::Error(e) = other {
                                 div { class: "error", "{e}" }

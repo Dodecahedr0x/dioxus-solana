@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use js_sys::{Array, Object};
+use js_sys::{Array, Object, Reflect};
 use wasm_bindgen::JsValue;
 
 use dioxus_solana_core::{Cluster, ConnectedAccount, Wallet, WalletError, WalletInfo};
@@ -36,6 +36,33 @@ impl StandardWallet {
         };
         Self { raw, info, cluster }
     }
+
+    async fn connect_with(&self, silent: bool) -> Result<ConnectedAccount, WalletError> {
+        let features =
+            get(&self.raw, "features").ok_or_else(|| WalletError::Js("no features".into()))?;
+        let feature = get(&features, "standard:connect")
+            .ok_or_else(|| WalletError::Feature("standard:connect".into()))?;
+        let f = get_function(&feature, "connect")
+            .ok_or_else(|| WalletError::Feature("standard:connect".into()))?;
+        // Wallet Standard (and MWA) accept `{ silent?: boolean }`. Silent is
+        // how autoconnect restores a cached MWA authorization without opening
+        // the wallet app.
+        let input = Object::new();
+        Reflect::set(&input, &"silent".into(), &JsValue::from_bool(silent)).unwrap();
+        let out = await_promise(f.call1(&feature, &input).map_err(|e| js_error(&e))?).await?;
+        // out = { accounts: [account, ...] }
+        let accounts = get(&out, "accounts")
+            .ok_or_else(|| WalletError::Js("connect returned no accounts".into()))?;
+        let account = Array::from(&accounts).get(0);
+        if account.is_undefined() {
+            return Err(WalletError::Disconnected);
+        }
+        let signer = StandardSigner::new(self.raw.clone(), account, self.cluster.clone())?;
+        Ok(ConnectedAccount {
+            wallet_name: self.info.name.clone(),
+            signer: Rc::new(signer),
+        })
+    }
 }
 
 #[async_trait(?Send)]
@@ -45,24 +72,10 @@ impl Wallet for StandardWallet {
     }
 
     async fn connect(&self) -> Result<ConnectedAccount, WalletError> {
-        let features =
-            get(&self.raw, "features").ok_or_else(|| WalletError::Js("no features".into()))?;
-        let feature = get(&features, "standard:connect")
-            .ok_or_else(|| WalletError::Feature("standard:connect".into()))?;
-        let f = get_function(&feature, "connect")
-            .ok_or_else(|| WalletError::Feature("standard:connect".into()))?;
-        let out = await_promise(f.call0(&feature).map_err(|e| js_error(&e))?).await?;
-        // out = { accounts: [account, ...] }
-        let accounts = get(&out, "accounts")
-            .ok_or_else(|| WalletError::Js("connect returned no accounts".into()))?;
-        let account = Array::from(&accounts).get(0);
-        if account.is_undefined() {
-            return Err(WalletError::Js("connect returned empty accounts".into()));
-        }
-        let signer = StandardSigner::new(self.raw.clone(), account, self.cluster.clone())?;
-        Ok(ConnectedAccount {
-            wallet_name: self.info.name.clone(),
-            signer: Rc::new(signer),
-        })
+        self.connect_with(false).await
+    }
+
+    async fn connect_silent(&self) -> Result<ConnectedAccount, WalletError> {
+        self.connect_with(true).await
     }
 }

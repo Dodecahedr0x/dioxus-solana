@@ -48,6 +48,72 @@ pub fn make_mock_wallet() -> JsValue {
     wallet.into()
 }
 
+/// Like [`make_mock_wallet`], but `standard:connect` records its input on
+/// `wallet.lastConnectInput` so tests can assert `{ silent: true/false }`.
+#[allow(dead_code)]
+pub fn make_recording_wallet() -> JsValue {
+    let wallet = Object::new();
+    set(&wallet, "version", &"1.0.0".into());
+    set(&wallet, "name", &"MockWallet".into());
+    set(
+        &wallet,
+        "icon",
+        &"data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=".into(),
+    );
+
+    let chains = Array::new();
+    chains.push(&"solana:devnet".into());
+    set(&wallet, "chains", &chains);
+
+    let account = Object::new();
+    set(
+        &account,
+        "address",
+        &"11111111111111111111111111111111".into(),
+    );
+    let pk = Uint8Array::new_with_length(32);
+    pk.fill(9, 0, 32);
+    set(&account, "publicKey", &pk);
+    let acc_chains = Array::new();
+    acc_chains.push(&"solana:devnet".into());
+    set(&account, "chains", &acc_chains);
+    set(&account, "features", &Array::new());
+    let accounts = Array::new();
+    accounts.push(&account);
+    set(&wallet, "accounts", &accounts);
+
+    let features = Object::new();
+    add_recording_connect_feature(&features, &accounts, &wallet);
+    add_sign_message_feature(&features);
+    add_sign_transaction_feature(&features);
+    add_sign_and_send_feature(&features);
+    add_disconnect_feature(&features);
+    set(&wallet, "features", &features);
+
+    wallet.into()
+}
+
+/// Connect returns `{ accounts: [] }` — the MWA silent-reconnect miss.
+#[allow(dead_code)]
+pub fn make_empty_connect_wallet() -> JsValue {
+    let wallet = Object::new();
+    set(&wallet, "version", &"1.0.0".into());
+    set(&wallet, "name", &"EmptyWallet".into());
+    set(&wallet, "accounts", &Array::new());
+    let features = Object::new();
+    let cb = Closure::<dyn FnMut() -> Promise>::new(move || {
+        let result = Object::new();
+        set(&result, "accounts", &Array::new());
+        Promise::resolve(&JsValue::from(result))
+    });
+    let f: &Function = cb.as_ref().unchecked_ref();
+    let (k, v) = feature("standard:connect", "connect", f);
+    Reflect::set(&features, &k, &v).unwrap();
+    cb.forget();
+    set(&wallet, "features", &features);
+    wallet.into()
+}
+
 /// Build a mock Wallet-Standard wallet object with name "BareWallet", one
 /// account (pubkey = 32 bytes of `0x09`), and an EMPTY features record — for
 /// exercising the missing-feature error paths.
@@ -101,6 +167,21 @@ fn add_connect_feature(features: &Object, _account: &Object, accounts: &Array) {
     let accounts = accounts.clone();
     // connect() -> Promise<{ accounts: [...] }>
     let cb = Closure::<dyn FnMut() -> Promise>::new(move || {
+        let result = Object::new();
+        set(&result, "accounts", &accounts);
+        Promise::resolve(&JsValue::from(result))
+    });
+    let f: &Function = cb.as_ref().unchecked_ref();
+    let (k, v) = feature("standard:connect", "connect", f);
+    Reflect::set(features, &k, &v).unwrap();
+    cb.forget();
+}
+
+fn add_recording_connect_feature(features: &Object, accounts: &Array, wallet: &Object) {
+    let accounts = accounts.clone();
+    let wallet = wallet.clone();
+    let cb = Closure::<dyn FnMut(JsValue) -> Promise>::new(move |input: JsValue| {
+        set(&wallet, "lastConnectInput", &input);
         let result = Object::new();
         set(&result, "accounts", &accounts);
         Promise::resolve(&JsValue::from(result))

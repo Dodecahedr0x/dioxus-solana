@@ -1,12 +1,12 @@
-use dioxus_solana_core::{Cluster, Wallet};
+use dioxus_solana_core::{AppIdentity, Cluster, Wallet};
 use std::rc::Rc;
 
 #[cfg(target_arch = "wasm32")]
 pub type Registry = dioxus_solana_web::discovery::WalletRegistry;
 
 #[cfg(target_arch = "wasm32")]
-pub fn new_registry(cluster: Cluster) -> Rc<Registry> {
-    Rc::new(Registry::new(cluster))
+pub fn new_registry(cluster: Cluster, identity: Option<AppIdentity>) -> Rc<Registry> {
+    Rc::new(Registry::new_with_identity(cluster, identity))
 }
 
 /// Run the discovery handshake and snapshot the currently-registered wallets.
@@ -25,7 +25,7 @@ pub fn run_discovery(registry: &Registry) -> Vec<Rc<dyn Wallet>> {
 pub struct Registry;
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn new_registry(_cluster: Cluster) -> Rc<Registry> {
+pub fn new_registry(_cluster: Cluster, _identity: Option<AppIdentity>) -> Rc<Registry> {
     Rc::new(Registry)
 }
 

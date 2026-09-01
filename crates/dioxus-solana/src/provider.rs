@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_solana_core::{Cluster, Wallet};
+use dioxus_solana_core::{AppIdentity, Cluster, Wallet};
 use std::rc::Rc;
 
 use crate::state::WalletState;
@@ -20,6 +20,12 @@ pub struct WalletProviderProps {
     pub cluster: Cluster,
     #[props(default = true)]
     pub autoconnect: bool,
+    /// Shown to the mobile wallet during Mobile Wallet Adapter authorization.
+    ///
+    /// When omitted, the page title and origin are used. `icon` must be a
+    /// relative path (MWA wallets reject absolute icon URLs).
+    #[props(default)]
+    pub app_identity: Option<AppIdentity>,
     pub children: Element,
 }
 
@@ -49,11 +55,12 @@ pub fn WalletProvider(props: WalletProviderProps) -> Element {
     use_context_provider(|| ctx);
 
     let autoconnect = props.autoconnect;
+    let identity = props.app_identity.clone();
 
     // Persistent registry: lives for the provider's lifetime so its
     // register-wallet listener/closure aren't dropped after one call.
     // `new_registry` has no side effects; the handshake runs in the effect.
-    let registry = use_hook(|| crate::platform::new_registry(cluster.peek().clone()));
+    let registry = use_hook(|| crate::platform::new_registry(cluster.peek().clone(), identity));
 
     // Runs exactly once on mount: the body only writes signals (never reactively
     // reads one), so it is not re-triggered. Do not add a signal read here.
@@ -72,7 +79,7 @@ pub fn WalletProvider(props: WalletProviderProps) -> Element {
                 if let Some(w) = found.iter().find(|w| w.info().name == name).cloned() {
                     spawn(async move {
                         state.set(WalletState::Connecting);
-                        match w.connect().await {
+                        match w.connect_silent().await {
                             Ok(acc) => state.set(WalletState::Connected(acc)),
                             Err(_) => state.set(WalletState::Disconnected),
                         }

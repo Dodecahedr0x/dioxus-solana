@@ -1,7 +1,7 @@
 # dioxus-solana
 
-Browser-wallet connection and signing (Wallet Standard) for Dioxus web apps, exposed via a
-`WalletProvider` context and a `use_wallet()` hook. It also ships an optional `RpcProvider` plus
+Browser-wallet connection and signing (Wallet Standard, plus Mobile Wallet Adapter on Android
+Chrome) for Dioxus web apps, exposed via a `WalletProvider` context and a `use_wallet()` hook. It also ships an optional `RpcProvider` plus
 reactive RPC hooks (`use_slot`, `use_account`, `use_balance`, subscriptions) backed by
 [`spume`](https://crates.io/crates/spume). The core is platform-agnostic so a desktop
 implementation can be dropped in later without changing the public API.
@@ -13,7 +13,9 @@ implementation can be dropped in later without changing the public API.
 - `crates/dioxus-solana-web` — implements those traits against the browser Wallet Standard
   registry via `wasm-bindgen` (the `wallet-standard:register-wallet` /
   `wallet-standard:app-ready` handshake, `standard:connect`, `solana:signMessage`,
-  `solana:signTransaction`, `solana:signAndSendTransaction`). Its `rpc` module wraps
+  `solana:signTransaction`, `solana:signAndSendTransaction`). On Android Chrome it also
+  registers [Mobile Wallet Adapter](https://docs.solanamobile.com/get-started/web/installation)
+  as a Wallet Standard wallet. Its `rpc` module wraps
   [`spume`](https://crates.io/crates/spume) for wasm JSON-RPC and PubSub.
 - `crates/dioxus-solana` — the facade crate apps depend on. Re-exports core types, selects the
   platform implementation by `cfg(target_arch)`, and layers Dioxus hooks/context on top.
@@ -37,7 +39,7 @@ against), either pass `WalletProvider` a `cluster` prop, or — if you also want
 
 ```rust
 use dioxus::prelude::*;
-use dioxus_solana::{Cluster, WalletProvider};
+use dioxus_solana::{AppIdentity, Cluster, WalletProvider};
 use dioxus_solana::rpc::RpcProvider;
 
 fn main() {
@@ -48,7 +50,13 @@ fn main() {
 fn Root() -> Element {
     rsx! {
         RpcProvider { cluster: Cluster::Devnet,
-            WalletProvider { autoconnect: true, App {} }
+            WalletProvider {
+                autoconnect: true,
+                // Shown in the mobile wallet during authorization. `icon` must be a
+                // relative path — MWA wallets reject absolute icon URLs.
+                app_identity: Some(AppIdentity::named("My dapp")),
+                App {}
+            }
         }
     }
 }
@@ -197,6 +205,16 @@ work without a wasm toolchain — with the wasm-specific paths behind small `cfg
 (only `storage`, which needs `localStorage`, is fully gated). The core crate has no wasm
 dependencies by design, so a desktop wallet implementation (local keypairs, a hardware wallet) can
 be added later behind the same `Wallet` / `WalletSigner` traits without changing the public API.
+
+On **Android Chrome**, `WalletProvider` registers [Mobile Wallet Adapter](https://docs.solanamobile.com/get-started/web/installation)
+as a Wallet Standard wallet before discovery, so Phantom / Solflare / Seeker appear without a
+browser extension. That registration is a no-op on desktop and iOS (use an extension or the
+wallet's in-app browser there). MWA requires a [secure context](https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts)
+(`https://` or `http://localhost`); a raw LAN IP over HTTP will not list the adapter. Pass
+`app_identity` so the wallet shows your dapp's name; omit it and the page title / origin are used.
+The identity `icon` must be a **relative** path (for example `favicon.ico`), resolved against
+`uri` — absolute icon URLs are rejected by MWA 2.0 wallets. Autoconnect uses a silent
+`standard:connect` so a cached mobile authorization is restored without reopening the wallet app.
 
 ## Building / testing
 

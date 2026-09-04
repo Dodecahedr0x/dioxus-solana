@@ -29,6 +29,7 @@ web-sys = { workspace = true, features = ["Window", "Storage"] }
 bs58 = "0.5"
 crypto_box = "0.9"
 serde_json = "1"
+solana-rpc-client = { workspace = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
 async-trait.workspace = true

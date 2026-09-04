@@ -27,6 +27,10 @@ Phantom through encrypted universal links. The wallet signs. This crate does not
 - `examples/connect-demo` — a Dioxus web app exercising connect / sign-message / disconnect, a
   devnet airdrop, sending an on-chain **memo transaction** (`sign_and_send`), a live slot
   subscription, and a live balance.
+- `examples/mobile-demo` — a Dioxus **native** Android/iOS app: connect the on-device Mobile
+  wallet (MWA / Phantom), refresh balance via Agave `solana-rpc-client`, sign a message, and
+  send an on-chain memo (Android `signAndSend`, iOS sign + RPC submit). Run with
+  `dx serve --package mobile-demo --android` or `--ios`.
 
 ## Quickstart
 
@@ -187,13 +191,14 @@ Available hooks:
   `use_program_subscription`, `use_signature_subscription`, `use_block_subscription`, and the
   generic `use_subscription`.
 - **Live values:** `use_account`, `use_account_data`, `use_balance`.
-- **Client:** `use_rpc` returns the spume `WasmClient` for arbitrary calls.
+- **Client:** `use_rpc` — on wasm returns spume's `WasmClient`; on native returns Agave's
+  `solana_rpc_client::nonblocking::rpc_client::RpcClient` (behind `Arc`).
 
-The `rpc` module re-exports the spume surface and result types you need to name. spume is a browser
-client, so the hooks only *do* anything on `wasm32` — but they compile on native too, so consumer
-builds (and rust-analyzer) stay green everywhere.
+The reactive fetch / subscription / live hooks are wasm-only (spume). `RpcProvider` and
+`use_rpc` work on native too, so mobile apps can call `get_balance` / `get_latest_blockhash` /
+`send_transaction` without a hand-rolled JSON-RPC client.
 
-See `examples/connect-demo` for a complete, buildable app.
+See `examples/connect-demo` (web) and `examples/mobile-demo` (Android/iOS) for complete apps.
 
 ## What this crate does *not* do
 
@@ -204,12 +209,10 @@ optionally sent).
 
 ## Platform support
 
-Web-only today: wallet discovery and the RPC clients only *work* on `wasm32` (they use browser
-APIs). The whole tree still *compiles* on native — so `cargo check --workspace` and rust-analyzer
-work without a wasm toolchain — with the wasm-specific paths behind small `cfg(target_arch)` seams
-(only `storage`, which needs `localStorage`, is fully gated). The core crate has no wasm
-dependencies by design, so a desktop wallet implementation (local keypairs, a hardware wallet) can
-be added later behind the same `Wallet` / `WalletSigner` traits without changing the public API.
+Wallet discovery works on `wasm32` (Wallet Standard + MWA on Android Chrome), native Android
+(`dx serve --android`, MWA via JNI), and native iOS (`dx serve --ios`, Phantom universal links).
+`RpcProvider` / `use_rpc` work on wasm (spume) and native (Agave `solana-rpc-client`). The reactive
+RPC hooks (`use_balance`, subscriptions, …) remain wasm-only.
 
 On **Android Chrome**, `WalletProvider` registers [Mobile Wallet Adapter](https://docs.solanamobile.com/get-started/web/installation)
 as a Wallet Standard wallet before discovery, so Phantom / Solflare / Seeker appear without a
@@ -235,6 +238,13 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo build --target wasm32-unknown-unknown -p dioxus-solana -p dioxus-solana-web -p connect-demo
 cargo clippy -p connect-demo --target wasm32-unknown-unknown -- -D warnings
 
-# run the example locally (requires the Dioxus CLI: cargo install dioxus-cli)
+# run the web example locally (requires the Dioxus CLI: cargo install dioxus-cli)
 dx serve --package connect-demo
+
+# run the native mobile example (Android emulator/device or iOS simulator)
+dx serve --package mobile-demo --android
+dx serve --package mobile-demo --ios
 ```
+
+The mobile demo registers the `dioxussolana://` URL scheme so Phantom can redirect back after
+signing on iOS.

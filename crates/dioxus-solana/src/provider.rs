@@ -40,16 +40,9 @@ pub fn WalletProvider(props: WalletProviderProps) -> Element {
     // RpcProvider is present; the ancestor's cluster wins when it is.
     let fallback = use_signal(move || props.cluster);
     let cluster = use_hook(|| {
-        #[cfg(target_arch = "wasm32")]
-        {
-            try_consume_context::<crate::rpc::RpcContext>()
-                .map(|rpc| rpc.cluster)
-                .unwrap_or(fallback)
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            fallback
-        }
+        try_consume_context::<crate::rpc::RpcContext>()
+            .map(|rpc| rpc.cluster)
+            .unwrap_or(fallback)
     });
     let state = use_signal(WalletState::default);
     let wallets = use_signal(Vec::<Rc<dyn Wallet>>::new);

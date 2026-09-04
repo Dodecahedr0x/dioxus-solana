@@ -1,20 +1,26 @@
 use dioxus::prelude::*;
-use dioxus_solana::rpc::{use_account, use_balance, use_rpc};
-use dioxus_solana::{serialize_transaction, use_wallet, Pubkey};
+use dioxus_solana::{use_wallet, Pubkey};
 
+use crate::truncate;
+
+#[cfg(target_arch = "wasm32")]
 use solana_hash::Hash;
+#[cfg(target_arch = "wasm32")]
 use solana_instruction::{AccountMeta, Instruction};
+#[cfg(target_arch = "wasm32")]
 use solana_message::{Message, VersionedMessage};
+#[cfg(target_arch = "wasm32")]
 use solana_signature::Signature;
+#[cfg(target_arch = "wasm32")]
 use solana_transaction::versioned::VersionedTransaction;
 
-use crate::{lamports_to_sol, truncate};
-
 /// SPL Memo program (v2).
+#[cfg(target_arch = "wasm32")]
 const MEMO_PROGRAM: Pubkey = Pubkey::from_str_const("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 
 /// Build an unsigned legacy transaction with a single Memo instruction.
 /// The wallet fills in the signature when it signs-and-sends.
+#[cfg(target_arch = "wasm32")]
 fn memo_tx(payer: Pubkey, memo: &str, blockhash: Hash) -> VersionedTransaction {
     let ix = Instruction {
         program_id: MEMO_PROGRAM,
@@ -31,8 +37,14 @@ fn memo_tx(payer: Pubkey, memo: &str, blockhash: Hash) -> VersionedTransaction {
 
 /// Connected-account panel. Only mounts while connected, so its RPC hooks
 /// (`use_balance`, `use_account`) run for exactly that lifetime.
+#[cfg(target_arch = "wasm32")]
 #[component]
 pub fn Connected(pubkey: Pubkey) -> Element {
+    use dioxus_solana::rpc::{use_account, use_balance, use_rpc};
+    use dioxus_solana::serialize_transaction;
+
+    use crate::lamports_to_sol;
+
     let wallet = use_wallet();
     let rpc = use_rpc();
     let balance = use_balance(pubkey);
@@ -168,6 +180,48 @@ pub fn Connected(pubkey: Pubkey) -> Element {
         if let Some(msg) = airdrop() {
             div { class: "note", "{msg}" }
         }
+        if let Some(sig) = last_sig() {
+            div { class: "signature",
+                span { class: "label", "Signature" }
+                code { "{truncate(&sig)}" }
+            }
+        }
+    }
+}
+
+/// Native connected panel — wallet actions only (RPC hooks are wasm-only).
+#[cfg(not(target_arch = "wasm32"))]
+#[component]
+pub fn Connected(pubkey: Pubkey) -> Element {
+    let wallet = use_wallet();
+    let mut last_sig = use_signal(|| Option::<String>::None);
+
+    rsx! {
+        div { class: "account",
+            span { class: "label", "Connected account" }
+            code { class: "pubkey", "{truncate(&pubkey.to_string())}" }
+            div { class: "meta",
+                span { class: "chip", "{wallet.cluster().chain_id()}" }
+            }
+        }
+
+        div { class: "actions",
+            button {
+                class: "btn btn-primary",
+                onclick: move |_| async move {
+                    if let Ok(sig) = wallet.sign_message(b"gm from dioxus".to_vec()).await {
+                        last_sig.set(Some(sig.to_string()));
+                    }
+                },
+                "Sign message"
+            }
+            button {
+                class: "btn btn-ghost",
+                onclick: move |_| wallet.disconnect(),
+                "Disconnect"
+            }
+        }
+
         if let Some(sig) = last_sig() {
             div { class: "signature",
                 span { class: "label", "Signature" }

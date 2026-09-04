@@ -1,7 +1,10 @@
-//! Reactive Solana RPC providers and hooks, backed by [`spume`].
+//! Reactive Solana RPC providers and hooks.
 //!
-//! Mount an [`RpcProvider`] near the app root, then call the hooks from any
-//! descendant. Hooks come in three families:
+//! Mount an [`RpcProvider`] near the app root. On wasm, hooks are backed by
+//! [`spume`]; on native, [`use_rpc`] returns Agave's
+//! [`solana_rpc_client::nonblocking::rpc_client::RpcClient`].
+//!
+//! Wasm-only hook families:
 //!
 //! - **Fetch** — one `use_get_*` per JSON-RPC read method (and the generic
 //!   [`use_fetch`]). Each does one HTTP request and returns a
@@ -14,10 +17,9 @@
 //!   fetch immediately *and* subscribe, so a value is available at once and then
 //!   kept current.
 //!
-//! Result/config types are re-exported here (flat, and via the [`config`] /
-//! [`response`] modules). Mutating methods (`sendTransaction`, `requestAirdrop`)
-//! are deliberately *not* hooks — auto-firing them on render would be a bug; use
-//! [`use_rpc`] from an event handler instead.
+//! Mutating methods (`sendTransaction`, `requestAirdrop`) are deliberately *not*
+//! hooks — auto-firing them on render would be a bug; use [`use_rpc`] from an
+//! event handler instead.
 //!
 //! ```ignore
 //! rsx! {
@@ -25,29 +27,33 @@
 //!         Body {}
 //!     }
 //! }
-//!
-//! // inside Body:
-//! let slot = use_slot_subscription();  // ReadSignal<Option<u64>>
-//! let health = use_get_health();       // Resource<Option<String>>
 //! ```
 
+#[cfg(target_arch = "wasm32")]
 mod fetch;
+#[cfg(target_arch = "wasm32")]
 mod live;
+#[cfg(target_arch = "wasm32")]
 mod subscription;
 
 use dioxus::prelude::*;
 use dioxus_solana_core::Cluster;
 
-// Re-exported so consumers can name what the hooks return/take. The `config` and
-// `response` modules carry the long tail of `Rpc*` types.
+#[cfg(target_arch = "wasm32")]
 pub use dioxus_solana_web::rpc::{
     config, response, spume, EncodedConfirmedTransactionWithStatusMeta, EpochInfo, EpochSchedule,
     TransactionStatus, WasmClient,
 };
 
+#[cfg(target_arch = "wasm32")]
 pub use fetch::*;
+#[cfg(target_arch = "wasm32")]
 pub use live::*;
+#[cfg(target_arch = "wasm32")]
 pub use subscription::*;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 
 /// The resolved cluster shared with descendant RPC hooks. Provided by
 /// [`RpcProvider`]; hooks read its endpoints via [`Cluster::rpc_url`] /
@@ -98,10 +104,22 @@ pub fn RpcProvider(props: RpcProviderProps) -> Element {
     rsx! { {props.children} }
 }
 
-/// A cloneable spume HTTP client for arbitrary calls (including the mutating
-/// `send_transaction` / `request_airdrop`, which have no auto-firing hook).
+/// Cloneable HTTP RPC client for arbitrary calls (including mutating methods
+/// like `send_transaction` / `request_airdrop`, which have no auto-firing hook).
+///
+/// - **wasm** — spume [`WasmClient`]
+/// - **native** — Agave [`RpcClient`] behind an [`Arc`]
+#[cfg(target_arch = "wasm32")]
 pub fn use_rpc() -> WasmClient {
     let ctx = use_context::<RpcContext>();
-    // Build once on mount, not per render.
     use_hook(|| WasmClient::new(ctx.cluster.peek().rpc_url().to_string()))
+}
+
+/// Cloneable HTTP RPC client for arbitrary calls.
+///
+/// Native builds use Agave's nonblocking [`RpcClient`].
+#[cfg(not(target_arch = "wasm32"))]
+pub fn use_rpc() -> std::sync::Arc<RpcClient> {
+    let ctx = use_context::<RpcContext>();
+    use_hook(|| std::sync::Arc::new(RpcClient::new(ctx.cluster.peek().rpc_url().to_string())))
 }

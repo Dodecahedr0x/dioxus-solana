@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/*", "examples/*"]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/aursen-labs/dioxus-solana"
@@ -13,6 +13,7 @@ repository = "https://github.com/aursen-labs/dioxus-solana"
 solana-pubkey = ">=3"
 solana-signature = ">=3"
 solana-transaction = { version = ">=3", features = ["serde"] }
+solana-rpc-client = { version = "4.1", default-features = false }
 bincode = "1"
 async-trait = "0.1"
 thiserror = "2"
@@ -24,5 +25,5 @@ web-sys = "0.3"
 gloo-events = "0.3"
 # UI
 dioxus = "0.7"
-dioxus-solana-core = { path = "crates/dioxus-solana-core", version = "0.2.0" }
-dioxus-solana-web = { path = "crates/dioxus-solana-web", version = "0.2.0" }
+dioxus-solana-core = { path = "crates/dioxus-solana-core", version = "0.3.0" }
+dioxus-solana-web = { path = "crates/dioxus-solana-web", version = "0.3.0" }

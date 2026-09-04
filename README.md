@@ -241,10 +241,12 @@ cargo clippy -p connect-demo --target wasm32-unknown-unknown -- -D warnings
 # run the web example locally (requires the Dioxus CLI: cargo install dioxus-cli)
 dx serve --package connect-demo
 
-# run the native mobile example (Android emulator/device or iOS simulator)
+# run the native mobile example (Android emulator/device or iOS simulator).
+# `dx` enables the example's `mobile` Cargo feature (dioxus/mobile) for you.
 dx serve --package mobile-demo --android
 dx serve --package mobile-demo --ios
 ```
 
 The mobile demo registers the `dioxussolana://` URL scheme so Phantom can redirect back after
-signing on iOS.
+signing on iOS. Host `cargo clippy --workspace` builds the example without that feature so Linux
+CI does not need WebKit/glib.

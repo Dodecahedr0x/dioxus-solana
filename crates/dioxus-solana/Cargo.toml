@@ -11,17 +11,36 @@ categories = ["wasm", "web-programming", "gui"]
 
 [dependencies]
 dioxus-solana-core.workspace = true
-dioxus-solana-web.workspace = true
 dioxus.workspace = true
 solana-pubkey.workspace = true
 solana-transaction.workspace = true
 solana-signature.workspace = true
 futures-util = "0.3"
 serde = "1"
+base64 = "0.22"
 
-# web-sys (localStorage) only backs the wasm-only `storage` module.
+# Browser Wallet Standard + spume RPC. Host/Android must not pull this crate
+# (spume splits wincode 0.5/0.6 on native).
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+dioxus-solana-web.workspace = true
 web-sys = { workspace = true, features = ["Window", "Storage"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+bs58 = "0.5"
+crypto_box = "0.9"
+serde_json = "1"
+solana-rpc-client = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+async-trait.workspace = true
+futures-channel = "0.3"
+jni = "0.21"
+manganis = "=0.7.10"
+
+[target.'cfg(target_os = "ios")'.dependencies]
+async-trait.workspace = true
+futures-channel = "0.3"
+manganis = "=0.7.10"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

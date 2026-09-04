@@ -30,15 +30,27 @@ impl WalletError {
             "rejected the request",
             "user declined",
             "user denied",
+            "did not authorize",
+            "request was interrupted",
         ];
         if REJECTION_PHRASES.iter().any(|p| lower.contains(p)) {
             return WalletError::UserRejected;
         }
-        const NOT_INSTALLED_PHRASES: &[&str] = &["no installed wallet", "wallet not found"];
+        const NOT_INSTALLED_PHRASES: &[&str] = &[
+            "no installed wallet",
+            "wallet not found",
+            "no compatible wallet",
+        ];
         if NOT_INSTALLED_PHRASES.iter().any(|p| lower.contains(p)) {
             return WalletError::NotInstalled;
         }
         WalletError::Js(message.to_string())
+    }
+}
+
+impl From<std::array::TryFromSliceError> for WalletError {
+    fn from(e: std::array::TryFromSliceError) -> Self {
+        WalletError::Codec(e.to_string())
     }
 }
 
@@ -85,5 +97,27 @@ mod tests {
             WalletError::from_js(None, "Found no installed wallet that supports MWA"),
             WalletError::NotInstalled
         );
+    }
+
+    #[test]
+    fn maps_mwa_did_not_authorize() {
+        assert_eq!(
+            WalletError::from_js(None, "User did not authorize signing"),
+            WalletError::UserRejected
+        );
+    }
+
+    #[test]
+    fn maps_mwa_no_compatible_wallet() {
+        assert_eq!(
+            WalletError::from_js(None, "No compatible wallet found."),
+            WalletError::NotInstalled
+        );
+    }
+
+    #[test]
+    fn try_from_slice_error_is_codec() {
+        let err = WalletError::from(<[u8; 32]>::try_from(&[0u8; 4][..]).unwrap_err());
+        assert!(matches!(err, WalletError::Codec(_)));
     }
 }

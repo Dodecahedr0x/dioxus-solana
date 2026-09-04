@@ -1,0 +1,23 @@
+[application]
+name = "mobile-demo"
+default_platform = "android"
+
+[bundle]
+identifier = "dev.dioxus.solana.mobile"
+publisher = "dioxus-solana"
+short_description = "Native Solana wallet demo for Android and iOS"
+
+# Phantom iOS redirects to dioxussolana://phantom-callback (see native_phantom::PHANTOM_REDIRECT).
+[deep_links]
+schemes = ["dioxussolana"]
+
+[ios]
+deployment_target = "15.0"
+
+# Required for UIApplication.canOpenURL("phantom://") in PhantomPlugin.
+[ios.plist]
+LSApplicationQueriesSchemes = ["phantom"]
+
+[android]
+min_sdk = 24
+target_sdk = 34

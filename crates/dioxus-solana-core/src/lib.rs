@@ -5,9 +5,7 @@ mod error;
 mod types;
 mod wallet;
 pub use cluster::{Cluster, CustomCluster};
-pub use codec::{
-    deserialize_transaction, pubkey_from_slice, serialize_transaction, signature_from_slice,
-};
+pub use codec::{deserialize_transaction, serialize_transaction};
 pub use error::WalletError;
 pub use types::{AppIdentity, ConnectedAccount, WalletInfo};
 pub use wallet::{Wallet, WalletSigner};

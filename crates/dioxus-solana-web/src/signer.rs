@@ -3,8 +3,7 @@ use js_sys::{Array, Object, Reflect, Uint8Array};
 use wasm_bindgen::JsValue;
 
 use dioxus_solana_core::{
-    deserialize_transaction, pubkey_from_slice, serialize_transaction, signature_from_slice,
-    Cluster, WalletError, WalletSigner,
+    deserialize_transaction, serialize_transaction, Cluster, WalletError, WalletSigner,
 };
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
@@ -26,7 +25,7 @@ impl StandardSigner {
         let pk = get(&account, "publicKey")
             .ok_or_else(|| WalletError::Js("account missing publicKey".into()))?;
         let bytes = crate::js::as_byte_vec(&pk)?;
-        let pubkey = pubkey_from_slice(&bytes)?;
+        let pubkey = Pubkey::try_from(bytes.as_slice())?;
         Ok(Self {
             wallet,
             account,
@@ -70,7 +69,9 @@ impl WalletSigner for StandardSigner {
         // out is an array; first element has `signature: Uint8Array`
         let first = Array::from(&out).get(0);
         let sig = get(&first, "signature").ok_or_else(|| WalletError::Js("no signature".into()))?;
-        signature_from_slice(&crate::js::as_byte_vec(&sig)?)
+        Ok(Signature::try_from(
+            crate::js::as_byte_vec(&sig)?.as_slice(),
+        )?)
     }
 
     async fn sign_transaction(
@@ -120,7 +121,9 @@ impl WalletSigner for StandardSigner {
         .await?;
         let first = Array::from(&out).get(0);
         let sig = get(&first, "signature").ok_or_else(|| WalletError::Js("no signature".into()))?;
-        signature_from_slice(&crate::js::as_byte_vec(&sig)?)
+        Ok(Signature::try_from(
+            crate::js::as_byte_vec(&sig)?.as_slice(),
+        )?)
     }
 
     async fn disconnect(&self) -> Result<(), WalletError> {

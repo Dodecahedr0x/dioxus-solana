@@ -4,7 +4,9 @@ Browser-wallet connection and signing (Wallet Standard, plus Mobile Wallet Adapt
 Chrome) for Dioxus web apps, exposed via a `WalletProvider` context and a `use_wallet()` hook. It also ships an optional `RpcProvider` plus
 reactive RPC hooks (`use_slot`, `use_account`, `use_balance`, subscriptions) backed by
 [`spume`](https://crates.io/crates/spume). The core is platform-agnostic so a desktop
-implementation can be dropped in later without changing the public API.
+implementation can be dropped in later without changing the public API. Native Android
+(`dx serve --android`) discovers one **Mobile wallet** entry and talks to an on-device
+MWA wallet through JNI.
 
 ## Workspace layout
 
@@ -18,7 +20,8 @@ implementation can be dropped in later without changing the public API.
   as a Wallet Standard wallet. Its `rpc` module wraps
   [`spume`](https://crates.io/crates/spume) for wasm JSON-RPC and PubSub.
 - `crates/dioxus-solana` — the facade crate apps depend on. Re-exports core types, selects the
-  platform implementation by `cfg(target_arch)`, and layers Dioxus hooks/context on top.
+  platform implementation by `cfg`, and layers Dioxus hooks/context on top. Native Android uses
+  `crates/dioxus-solana/android` (Kotlin Mobile Wallet Adapter) through `manganis::ffi`.
 - `examples/connect-demo` — a Dioxus web app exercising connect / sign-message / disconnect, a
   devnet airdrop, sending an on-chain **memo transaction** (`sign_and_send`), a live slot
   subscription, and a live balance.

@@ -6,7 +6,8 @@ reactive RPC hooks (`use_slot`, `use_account`, `use_balance`, subscriptions) bac
 [`spume`](https://crates.io/crates/spume). The core is platform-agnostic so a desktop
 implementation can be dropped in later without changing the public API. Native Android
 (`dx serve --android`) discovers one **Mobile wallet** entry and talks to an on-device
-MWA wallet through JNI.
+MWA wallet through JNI. Native iOS (`dx serve --ios`) uses the same picker name and opens
+Phantom through encrypted universal links. The wallet signs. This crate does not submit.
 
 ## Workspace layout
 
@@ -21,7 +22,8 @@ MWA wallet through JNI.
   [`spume`](https://crates.io/crates/spume) for wasm JSON-RPC and PubSub.
 - `crates/dioxus-solana` — the facade crate apps depend on. Re-exports core types, selects the
   platform implementation by `cfg`, and layers Dioxus hooks/context on top. Native Android uses
-  `crates/dioxus-solana/android` (Kotlin Mobile Wallet Adapter) through `manganis::ffi`.
+  `crates/dioxus-solana/android` (Kotlin Mobile Wallet Adapter) through `manganis::ffi`. Native
+  iOS uses `crates/dioxus-solana/ios` (Phantom universal links) through `manganis::ffi`.
 - `examples/connect-demo` — a Dioxus web app exercising connect / sign-message / disconnect, a
   devnet airdrop, sending an on-chain **memo transaction** (`sign_and_send`), a live slot
   subscription, and a live balance.

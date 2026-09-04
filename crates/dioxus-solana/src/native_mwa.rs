@@ -1,5 +1,5 @@
 //! Host-testable Mobile Wallet Adapter helpers shared with the Android JNI
-//! wallet. Discovery still returns nothing on desktop and iOS.
+//! wallet. Native iOS uses Phantom deeplinks in [`crate::native_phantom`].
 
 use base64::Engine;
 use dioxus_solana_core::{WalletError, WalletInfo};
@@ -8,7 +8,7 @@ use solana_signature::Signature;
 
 const B64: base64::engine::GeneralPurpose = base64::engine::general_purpose::STANDARD;
 
-/// Picker name for the one native Android MWA entry.
+/// Picker name for the one native Android MWA / iOS Phantom entry.
 pub const MOBILE_WALLET_NAME: &str = "Mobile wallet";
 
 /// MWA `RpcCluster` name for a Wallet Standard chain id.

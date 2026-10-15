@@ -7,20 +7,20 @@ use futures_util::StreamExt;
 use serde::de::DeserializeOwned;
 use solana_pubkey::Pubkey;
 
-use dioxus_solana_web::rpc::config::*;
-use dioxus_solana_web::rpc::response::*;
-use dioxus_solana_web::rpc::{Subscription, WasmPubsubClient};
+use super::config::*;
+use super::response::*;
+use super::{PubsubClient, Subscription};
 
 use super::RpcContext;
 
-/// Drive any spume subscription into a signal, projecting each item with `map`.
+/// Drive any subscription into a signal, projecting each item with `map`.
 /// `map` returning `None` skips the update (e.g. a null account).
 pub(crate) fn subscribe_mapped<T, U, E, F, Fut, M>(subscribe: F, map: M) -> ReadSignal<Option<U>>
 where
     T: DeserializeOwned + 'static,
     U: 'static,
     E: 'static,
-    F: Fn(WasmPubsubClient) -> Fut + Clone + 'static,
+    F: Fn(PubsubClient) -> Fut + Clone + 'static,
     Fut: Future<Output = Result<Subscription<T>, E>> + 'static,
     M: Fn(T) -> Option<U> + Clone + 'static,
 {
@@ -31,7 +31,7 @@ where
         let subscribe = subscribe.clone();
         let map = map.clone();
         async move {
-            let Ok(client) = WasmPubsubClient::connect(ws_url) else {
+            let Ok(client) = PubsubClient::connect(ws_url) else {
                 return;
             };
             let Ok(mut sub) = subscribe(client).await else {
@@ -55,13 +55,13 @@ fn subscribe_response<T, E, F, Fut>(subscribe: F) -> ReadSignal<Option<T>>
 where
     T: DeserializeOwned + 'static,
     E: 'static,
-    F: Fn(WasmPubsubClient) -> Fut + Clone + 'static,
+    F: Fn(PubsubClient) -> Fut + Clone + 'static,
     Fut: Future<Output = Result<Subscription<Response<T>>, E>> + 'static,
 {
     subscribe_mapped(subscribe, |r: Response<T>| Some(r.value))
 }
 
-/// Escape hatch: drive any spume subscription, storing each item verbatim.
+/// Escape hatch: drive any subscription, storing each item verbatim.
 ///
 /// ```ignore
 /// let votes = use_subscription(|c| async move { c.vote_subscribe().await });
@@ -70,7 +70,7 @@ pub fn use_subscription<T, E, F, Fut>(subscribe: F) -> ReadSignal<Option<T>>
 where
     T: DeserializeOwned + 'static,
     E: 'static,
-    F: Fn(WasmPubsubClient) -> Fut + Clone + 'static,
+    F: Fn(PubsubClient) -> Fut + Clone + 'static,
     Fut: Future<Output = Result<Subscription<T>, E>> + 'static,
 {
     subscribe_mapped(subscribe, Some)

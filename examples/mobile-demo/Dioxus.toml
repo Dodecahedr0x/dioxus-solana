@@ -5,7 +5,7 @@ default_platform = "android"
 [bundle]
 identifier = "dev.dioxus.solana.mobile"
 publisher = "dioxus-solana"
-short_description = "Native Solana wallet demo for Android and iOS"
+short_description = "Solana wallet demo for web, Android and iOS"
 
 # Phantom iOS redirects to dioxussolana://phantom-callback (see native_phantom::PHANTOM_REDIRECT).
 [deep_links]

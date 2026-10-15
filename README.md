@@ -1,13 +1,18 @@
 # dioxus-solana
 
-Browser-wallet connection and signing (Wallet Standard, plus Mobile Wallet Adapter on Android
-Chrome) for Dioxus web apps, exposed via a `WalletProvider` context and a `use_wallet()` hook. It also ships an optional `RpcProvider` plus
-reactive RPC hooks (`use_slot`, `use_account`, `use_balance`, subscriptions) backed by
-[`spume`](https://crates.io/crates/spume). The core is platform-agnostic so a desktop
-implementation can be dropped in later without changing the public API. Native Android
-(`dx serve --android`) discovers one **Mobile wallet** entry and talks to an on-device
-MWA wallet through JNI. Native iOS (`dx serve --ios`) uses the same picker name and opens
-Phantom through encrypted universal links. The wallet signs. This crate does not submit.
+Solana wallet connection, signing, and reactive RPC for Dioxus apps on **web, Android and iOS**,
+exposed via a `WalletProvider` context and a `use_wallet()` hook, plus an `RpcProvider` with
+reactive RPC hooks (`use_balance`, `use_account`, subscriptions, …). The same app code compiles
+and runs on every supported platform:
+
+| Platform | Wallets | RPC transport |
+| --- | --- | --- |
+| Web (`wasm32`) | Wallet Standard extensions, plus Mobile Wallet Adapter on Android Chrome | browser `fetch` / `WebSocket` ([`spume`](https://crates.io/crates/spume)) |
+| Android (`dx serve --android`) | one **Mobile wallet** entry: on-device MWA wallet through JNI | Agave `solana-rpc-client` + tokio WebSocket |
+| iOS (`dx serve --ios`) | one **Mobile wallet** entry: Phantom through encrypted universal links | Agave `solana-rpc-client` + tokio WebSocket |
+| Desktop | **not supported** — building for a desktop target is a compile error | — |
+
+The wallet signs. This crate does not build transactions.
 
 ## Workspace layout
 
@@ -27,19 +32,19 @@ Phantom through encrypted universal links. The wallet signs. This crate does not
 - `examples/connect-demo` — a Dioxus web app exercising connect / sign-message / disconnect, a
   devnet airdrop, sending an on-chain **memo transaction** (`sign_and_send`), a live slot
   subscription, and a live balance.
-- `examples/mobile-demo` — a Dioxus **native** Android/iOS app: connect the on-device Mobile
-  wallet (MWA / Phantom), refresh balance via Agave `solana-rpc-client`, sign a message, and
-  send an on-chain memo (Android `signAndSend`, iOS sign + RPC submit). Run with
-  `dx serve --package mobile-demo --android` or `--ios`.
+- `examples/mobile-demo` — one cross-platform Dioxus app for Android, iOS **and** web: connect a
+  wallet (MWA / Phantom / browser extension), a live slot and live balance, sign a message, and
+  send an on-chain memo (`signAndSend` where supported, otherwise sign + RPC submit). Run with
+  `dx serve --package mobile-demo --android`, `--ios`, or `--web`.
 
 ## Quickstart
 
-Add the facade crate to your Dioxus web app:
+Add the facade crate to your Dioxus app (web, or `mobile` for Android/iOS):
 
 ```toml
 [dependencies]
 dioxus = { version = "0.7", features = ["web"] }
-dioxus-solana = "0.1"
+dioxus-solana = "0.3"
 ```
 
 Wrap your app in `WalletProvider` once, near the root. To pick the cluster (the chain wallets sign
@@ -191,12 +196,13 @@ Available hooks:
   `use_program_subscription`, `use_signature_subscription`, `use_block_subscription`, and the
   generic `use_subscription`.
 - **Live values:** `use_account`, `use_account_data`, `use_balance`.
-- **Client:** `use_rpc` — on wasm returns spume's `WasmClient`; on native returns Agave's
-  `solana_rpc_client::nonblocking::rpc_client::RpcClient` (behind `Arc`).
+- **Client:** `use_rpc()` returns a cloneable `RpcClient` with one typed method per JSON-RPC
+  method (`get_balance`, `get_latest_blockhash`, `send_transaction`, `request_airdrop`, …) and a
+  raw `send`. `PubsubClient` is its WebSocket counterpart. Address parameters accept a `Pubkey`
+  or its base58 string.
 
-The reactive fetch / subscription / live hooks are wasm-only (spume). `RpcProvider` and
-`use_rpc` work on native too, so mobile apps can call `get_balance` / `get_latest_blockhash` /
-`send_transaction` without a hand-rolled JSON-RPC client.
+Every hook and both clients behave identically on web, Android and iOS — only the transport
+underneath differs (see the table at the top).
 
 See `examples/connect-demo` (web) and `examples/mobile-demo` (Android/iOS) for complete apps.
 
@@ -209,10 +215,33 @@ optionally sent).
 
 ## Platform support
 
-Wallet discovery works on `wasm32` (Wallet Standard + MWA on Android Chrome), native Android
-(`dx serve --android`, MWA via JNI), and native iOS (`dx serve --ios`, Phantom universal links).
-`RpcProvider` / `use_rpc` work on wasm (spume) and native (Agave `solana-rpc-client`). The reactive
-RPC hooks (`use_balance`, subscriptions, …) remain wasm-only.
+See the table at the top. **Desktop is deliberately unsupported**: there is no desktop wallet to
+connect to, so instead of a provider that silently lists zero wallets, compiling `dioxus-solana`
+for a desktop target fails with a `compile_error!`. If you build a fullstack web app, the server
+half compiles for the host; enable the `server` feature there (wallets are unavailable on the
+server, RPC works):
+
+```toml
+[features]
+server = ["dioxus/server", "dioxus-solana/server"]
+```
+
+rust-analyzer analyzes the host target by default, so in a web/mobile-only project it will show
+that compile error. Point it at a supported target (`"rust-analyzer.cargo.target":
+"wasm32-unknown-unknown"`) or enable the feature for analysis (`"rust-analyzer.cargo.features":
+["dioxus-solana/server"]`).
+
+On Android/iOS the RPC clients run on the tokio runtime dioxus mobile provides;
+`PubsubClient::connect` returns an error if called outside one.
+
+**iOS simulator note (dx 0.7.10):** `dx build --platform ios` ad-hoc signs the bundled
+`DioxusSwiftPlugins.framework` and then modifies it, so the simulator refuses to load it ("Code
+Signature Invalid") the first time a wallet is opened. Until that is fixed upstream, re-sign it
+after building:
+
+```bash
+codesign -f -s - target/dx/<app>/debug/ios/<App>.app/Frameworks/DioxusSwiftPlugins.framework
+```
 
 On **Android Chrome**, `WalletProvider` registers [Mobile Wallet Adapter](https://docs.solanamobile.com/get-started/web/installation)
 as a Wallet Standard wallet before discovery, so Phantom / Solflare / Seeker appear without a
@@ -226,27 +255,23 @@ The identity `icon` must be a **relative** path (for example `favicon.ico`), res
 
 ## Building / testing
 
-The example is a browser app (it does nothing useful off `wasm32`), but compiles on native so
-`--workspace` stays green.
-
 ```bash
-# native crates + tests
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
+# library on the host (unit tests; `server` lifts the desktop compile guard)
+cargo test --workspace --exclude connect-demo --exclude mobile-demo --features dioxus-solana/server
+# live devnet checks of the native RPC transport
+cargo test -p dioxus-solana --features server --test native_rpc -- --ignored
 
-# wasm target (facade, web impl, and the example)
-cargo build --target wasm32-unknown-unknown -p dioxus-solana -p dioxus-solana-web -p connect-demo
-cargo clippy -p connect-demo --target wasm32-unknown-unknown -- -D warnings
+# every supported target (Android needs the NDK's clang on PATH / CC_aarch64_linux_android)
+cargo clippy -p dioxus-solana -p mobile-demo -p connect-demo --all-targets --target wasm32-unknown-unknown -- -D warnings
+cargo clippy -p dioxus-solana -p mobile-demo --all-targets --target aarch64-apple-ios -- -D warnings
+cargo clippy -p dioxus-solana -p mobile-demo --all-targets --target aarch64-linux-android -- -D warnings
 
-# run the web example locally (requires the Dioxus CLI: cargo install dioxus-cli)
+# run the examples (requires the Dioxus CLI: cargo install dioxus-cli)
 dx serve --package connect-demo
-
-# run the native mobile example (Android emulator/device or iOS simulator).
-# `dx` enables the example's `mobile` Cargo feature (dioxus/mobile) for you.
+dx serve --package mobile-demo --web
 dx serve --package mobile-demo --android
 dx serve --package mobile-demo --ios
 ```
 
 The mobile demo registers the `dioxussolana://` URL scheme so Phantom can redirect back after
-signing on iOS. Host `cargo clippy --workspace` builds the example without that feature so Linux
-CI does not need WebKit/glib.
+signing on iOS.

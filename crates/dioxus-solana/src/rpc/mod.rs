@@ -1,10 +1,8 @@
 //! Reactive Solana RPC providers and hooks.
 //!
-//! Mount an [`RpcProvider`] near the app root. On wasm, hooks are backed by
-//! [`spume`]; on native, [`use_rpc`] returns Agave's
-//! [`solana_rpc_client::nonblocking::rpc_client::RpcClient`].
-//!
-//! Wasm-only hook families:
+//! Mount an [`RpcProvider`] near the app root. Every hook and client below
+//! works identically on web, Android and iOS (see [`RpcClient`] for the
+//! per-platform transports).
 //!
 //! - **Fetch** — one `use_get_*` per JSON-RPC read method (and the generic
 //!   [`use_fetch`]). Each does one HTTP request and returns a
@@ -29,31 +27,45 @@
 //! }
 //! ```
 
-#[cfg(target_arch = "wasm32")]
+mod client;
 mod fetch;
-#[cfg(target_arch = "wasm32")]
 mod live;
-#[cfg(target_arch = "wasm32")]
+mod methods;
+mod pubsub_methods;
 mod subscription;
+
+#[cfg(not(target_arch = "wasm32"))]
+mod native;
+#[cfg(target_arch = "wasm32")]
+mod wasm;
 
 use dioxus::prelude::*;
 use dioxus_solana_core::Cluster;
+use solana_account_decoder_client_types::UiAccountEncoding;
 
-#[cfg(target_arch = "wasm32")]
-pub use dioxus_solana_web::rpc::{
-    config, response, spume, EncodedConfirmedTransactionWithStatusMeta, EpochInfo, EpochSchedule,
-    TransactionStatus, WasmClient,
-};
-
-#[cfg(target_arch = "wasm32")]
+pub use client::{PubsubClient, RpcClient, RpcResult, Subscription};
 pub use fetch::*;
-#[cfg(target_arch = "wasm32")]
 pub use live::*;
-#[cfg(target_arch = "wasm32")]
+pub use methods::CheckAddress;
 pub use subscription::*;
 
-#[cfg(not(target_arch = "wasm32"))]
-pub use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+pub use solana_account_decoder_client_types::UiAccountData;
+pub use solana_epoch_info::EpochInfo;
+pub use solana_epoch_schedule::EpochSchedule;
+pub use solana_rpc_client_types::request::{RpcError, RpcRequest};
+pub use solana_rpc_client_types::{config, response};
+pub use solana_transaction_status_client_types::{
+    EncodedConfirmedTransactionWithStatusMeta, TransactionStatus,
+};
+
+/// Account-info config requesting base64-encoded data, so [`UiAccountData::decode`]
+/// yields raw bytes for the caller to deserialize.
+pub fn base64_account_config() -> config::RpcAccountInfoConfig {
+    config::RpcAccountInfoConfig {
+        encoding: Some(UiAccountEncoding::Base64),
+        ..Default::default()
+    }
+}
 
 /// The resolved cluster shared with descendant RPC hooks. Provided by
 /// [`RpcProvider`]; hooks read its endpoints via [`Cluster::rpc_url`] /
@@ -104,22 +116,9 @@ pub fn RpcProvider(props: RpcProviderProps) -> Element {
     rsx! { {props.children} }
 }
 
-/// Cloneable HTTP RPC client for arbitrary calls (including mutating methods
-/// like `send_transaction` / `request_airdrop`, which have no auto-firing hook).
-///
-/// - **wasm** — spume [`WasmClient`]
-/// - **native** — Agave [`RpcClient`] behind an [`Arc`]
-#[cfg(target_arch = "wasm32")]
-pub fn use_rpc() -> WasmClient {
+/// Cloneable HTTP RPC client for arbitrary calls, including mutating methods
+/// like `send_transaction` / `request_airdrop`, which have no auto-firing hook.
+pub fn use_rpc() -> RpcClient {
     let ctx = use_context::<RpcContext>();
-    use_hook(|| WasmClient::new(ctx.cluster.peek().rpc_url().to_string()))
-}
-
-/// Cloneable HTTP RPC client for arbitrary calls.
-///
-/// Native builds use Agave's nonblocking [`RpcClient`].
-#[cfg(not(target_arch = "wasm32"))]
-pub fn use_rpc() -> std::sync::Arc<RpcClient> {
-    let ctx = use_context::<RpcContext>();
-    use_hook(|| std::sync::Arc::new(RpcClient::new(ctx.cluster.peek().rpc_url().to_string())))
+    use_hook(|| RpcClient::new(ctx.cluster.peek().rpc_url()))
 }

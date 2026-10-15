@@ -1,14 +1,14 @@
 use dioxus::prelude::*;
-use dioxus_solana::rpc::{use_rpc, RpcClient, RpcProvider};
+use dioxus_solana::rpc::{use_balance, use_rpc, use_slot_subscription, RpcClient, RpcProvider};
 use dioxus_solana::{
-    use_wallet, AppIdentity, Cluster, Pubkey, WalletError, WalletProvider, WalletState,
+    serialize_transaction, use_wallet, AppIdentity, Cluster, Pubkey, WalletError, WalletProvider,
+    WalletState,
 };
 use solana_hash::Hash;
 use solana_instruction::{AccountMeta, Instruction};
 use solana_message::{Message, VersionedMessage};
 use solana_signature::Signature;
 use solana_transaction::versioned::VersionedTransaction;
-use std::sync::Arc;
 
 /// SPL Memo program (v2).
 const MEMO_PROGRAM: Pubkey = Pubkey::from_str_const("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
@@ -38,6 +38,8 @@ fn Root() -> Element {
 #[component]
 fn App() -> Element {
     let wallet = use_wallet();
+    let slot = use_slot_subscription();
+    let slot_value = slot().map_or("…".to_string(), |s| s.to_string());
 
     rsx! {
         main { class: "page",
@@ -46,12 +48,12 @@ fn App() -> Element {
                     div { class: "logo", "◎" }
                     div {
                         h1 { "dioxus-solana" }
-                        p { class: "subtitle", "Native mobile wallet demo" }
+                        p { class: "subtitle", "Cross-platform wallet demo" }
                     }
-                    div { class: "slot", title: "Signing cluster",
+                    div { class: "slot", title: "Live slot ({wallet.cluster().chain_id()})",
                         span { class: "slot-dot" }
-                        span { class: "slot-label", "cluster" }
-                        span { class: "slot-value", "{wallet.cluster().chain_id()}" }
+                        span { class: "slot-label", "slot" }
+                        span { class: "slot-value", "{slot_value}" }
                     }
                 }
 
@@ -69,7 +71,7 @@ fn App() -> Element {
                         let wallets = wallet.wallets();
                         rsx! {
                             p { class: "prompt",
-                                "Connect the on-device Solana wallet (Android MWA or iOS Phantom)."
+                                "Connect a Solana wallet (Android MWA, iOS Phantom, or a browser extension on web)."
                             }
                             div { class: "wallet-list",
                                 for info in &wallets {
@@ -90,11 +92,7 @@ fn App() -> Element {
                             }
                             if wallets.is_empty() {
                                 p { class: "empty",
-                                    "No mobile wallet bridge on this target. Run with "
-                                    code { "dx serve --android" }
-                                    " or "
-                                    code { "dx serve --ios" }
-                                    "."
+                                    "No wallet found. On web, install a Solana wallet extension; on mobile, install Phantom (iOS) or an MWA wallet (Android)."
                                 }
                             }
                             if let WalletState::Error(e) = other {
@@ -116,24 +114,11 @@ fn App() -> Element {
 fn Connected(pubkey: Pubkey) -> Element {
     let wallet = use_wallet();
     let rpc = use_rpc();
-    let mut balance = use_signal(|| Option::<u64>::None);
+    // Fetched on mount, then kept current over a WebSocket subscription.
+    let balance = use_balance(pubkey);
     let mut last_sig = use_signal(|| Option::<String>::None);
     let mut memo = use_signal(|| "gm from dioxus-solana mobile".to_string());
     let mut status = use_signal(|| Option::<String>::None);
-    let mut tick = use_signal(|| 0u32);
-
-    // Refresh balance on connect and after each successful action.
-    let rpc_for_balance = rpc.clone();
-    use_effect(move || {
-        let _ = tick();
-        let rpc = rpc_for_balance.clone();
-        spawn(async move {
-            match rpc.get_balance(&pubkey).await {
-                Ok(lamports) => balance.set(Some(lamports)),
-                Err(e) => status.set(Some(format!("Balance failed: {e}"))),
-            }
-        });
-    });
 
     rsx! {
         div { class: "account",
@@ -169,13 +154,6 @@ fn Connected(pubkey: Pubkey) -> Element {
             }
             button {
                 class: "btn btn-ghost",
-                onclick: move |_| {
-                    tick.set(tick() + 1);
-                },
-                "Refresh balance"
-            }
-            button {
-                class: "btn btn-ghost",
                 onclick: move |_| wallet.disconnect(),
                 "Disconnect"
             }
@@ -201,12 +179,16 @@ fn Connected(pubkey: Pubkey) -> Element {
                                 return;
                             }
                             status.set(Some("Fetching blockhash…".into()));
-                            let blockhash = match rpc.get_latest_blockhash().await {
-                                Ok(h) => h,
+                            let blockhash = match rpc.get_latest_blockhash(None).await {
+                                Ok(resp) => resp.value.blockhash,
                                 Err(e) => {
                                     status.set(Some(format!("Blockhash failed: {e}")));
                                     return;
                                 }
+                            };
+                            let Ok(blockhash) = blockhash.parse::<Hash>() else {
+                                status.set(Some("Bad blockhash".into()));
+                                return;
                             };
                             let tx = memo_tx(pubkey, &text, blockhash);
                             status.set(Some("Awaiting wallet…".into()));
@@ -217,7 +199,6 @@ fn Connected(pubkey: Pubkey) -> Element {
                                         truncate(&sig)
                                     )));
                                     last_sig.set(Some(sig));
-                                    tick.set(tick() + 1);
                                 }
                                 Err(e) => status.set(Some(e)),
                             }
@@ -243,7 +224,7 @@ fn Connected(pubkey: Pubkey) -> Element {
 /// Android MWA can sign-and-send; iOS Phantom signs only — then we submit via RPC.
 async fn send_memo(
     wallet: &dioxus_solana::WalletHandle,
-    rpc: &Arc<RpcClient>,
+    rpc: &RpcClient,
     tx: VersionedTransaction,
 ) -> Result<String, String> {
     match wallet.sign_and_send(tx.clone()).await {
@@ -253,9 +234,10 @@ async fn send_memo(
                 .sign_transaction(tx)
                 .await
                 .map_err(|e| format!("Sign failed: {e}"))?;
-            rpc.send_transaction(&signed)
+            let bytes =
+                serialize_transaction(&signed).map_err(|e| format!("Encode failed: {e}"))?;
+            rpc.send_transaction(bs58::encode(bytes).into_string(), None)
                 .await
-                .map(|sig| sig.to_string())
                 .map_err(|e| format!("Send failed: {e}"))
         }
         Err(e) => Err(format!("Send failed: {e}")),

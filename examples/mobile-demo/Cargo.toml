@@ -13,7 +13,9 @@ solana-message = "4.4"
 solana-transaction = "4.1"
 solana-hash = "4.5"
 solana-signature = "3.4"
+bs58 = "0.5"
 
 [features]
 default = []
 mobile = ["dioxus/mobile"]
+web = ["dioxus/web"]

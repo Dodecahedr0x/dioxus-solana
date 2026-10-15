@@ -4,6 +4,8 @@ use solana_signature::Signature;
 use solana_transaction::versioned::VersionedTransaction;
 
 /// A discovered wallet, before connection.
+// `async_trait` marks the boxed-future methods `#[must_use]`.
+#[allow(clippy::double_must_use)]
 #[async_trait::async_trait(?Send)]
 pub trait Wallet {
     fn info(&self) -> &WalletInfo;
@@ -20,6 +22,8 @@ pub trait Wallet {
 }
 
 /// An active signing session.
+// `async_trait` marks the boxed-future methods `#[must_use]`.
+#[allow(clippy::double_must_use)]
 #[async_trait::async_trait(?Send)]
 pub trait WalletSigner {
     fn pubkey(&self) -> Pubkey;

@@ -6,11 +6,11 @@ use std::future::Future;
 use dioxus::prelude::*;
 use solana_pubkey::Pubkey;
 
-use dioxus_solana_web::rpc::config::*;
-use dioxus_solana_web::rpc::response::*;
-use dioxus_solana_web::rpc::{
-    EncodedConfirmedTransactionWithStatusMeta, EpochInfo, EpochSchedule, TransactionStatus,
-    WasmClient,
+use super::config::*;
+use super::response::*;
+use super::{
+    EncodedConfirmedTransactionWithStatusMeta, EpochInfo, EpochSchedule, RpcClient,
+    TransactionStatus,
 };
 
 use super::use_rpc;
@@ -27,7 +27,7 @@ use super::use_rpc;
 pub fn use_fetch<T, F, Fut>(fetch: F) -> Resource<Option<T>>
 where
     T: 'static,
-    F: Fn(WasmClient) -> Fut + 'static,
+    F: Fn(RpcClient) -> Fut + 'static,
     Fut: Future<Output = Option<T>> + 'static,
 {
     let rpc = use_rpc();

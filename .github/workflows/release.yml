@@ -26,8 +26,12 @@ jobs:
       # their wincode-0.5 releases. `cargo publish`'s own verification does a
       # fresh resolve that would pick the incompatible wincode-0.6 versions, so
       # we verify here and publish with --no-verify below.
+      # Desktop is unsupported, so the facade builds on the host only with
+      # `server`; the examples are web/mobile apps and are not published.
       - name: Verify build (locked)
-        run: cargo build --workspace --locked
+        run: >
+          cargo build --workspace --exclude connect-demo --exclude mobile-demo
+          --features dioxus-solana/server --locked
 
       - name: Publish crates (in dependency order)
         env:

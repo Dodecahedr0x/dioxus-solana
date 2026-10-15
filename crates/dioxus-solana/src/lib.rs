@@ -1,3 +1,23 @@
+//! Solana wallets and reactive RPC for Dioxus apps on **web, Android and iOS**.
+//!
+//! Desktop is not supported: there is no wallet to connect to, so building for a
+//! desktop target is a compile error. Enable the `server` feature only for the
+//! server half of a fullstack web app (RPC works there; wallets do not).
+
+#[cfg(not(any(
+    target_arch = "wasm32",
+    target_os = "android",
+    target_os = "ios",
+    feature = "server",
+    test,
+    docsrs
+)))]
+compile_error!(
+    "dioxus-solana supports web (wasm32), Android and iOS only; desktop is not supported. \
+     Build with `dx serve --platform web|android|ios`. For the server half of a fullstack \
+     web app, enable the `server` feature."
+);
+
 mod hooks;
 #[allow(dead_code)]
 mod native_mwa;

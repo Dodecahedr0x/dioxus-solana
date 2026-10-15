@@ -3,8 +3,8 @@
 use dioxus::prelude::*;
 use solana_pubkey::Pubkey;
 
-use dioxus_solana_web::rpc::base64_account_config;
-use dioxus_solana_web::rpc::response::*;
+use super::base64_account_config;
+use super::response::*;
 
 use super::subscription::{subscribe_mapped, use_account_subscription};
 use super::use_rpc;

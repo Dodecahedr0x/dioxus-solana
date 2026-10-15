@@ -2,19 +2,22 @@ import Foundation
 import ObjectiveC.runtime
 import UIKit
 
-@_silgen_name("dioxus_solana_phantom_on_result")
-func dioxus_solana_phantom_on_result(
-    _ id: Int64,
-    _ status: UnsafePointer<CChar>?,
-    _ payload: UnsafePointer<CChar>?,
-    _ error: UnsafePointer<CChar>?
-)
+/// Rust completion callback, passed by address in each request. Swift never
+/// links against a Rust symbol: this package ships as a dynamically loaded
+/// framework and the app executable does not export one.
+typealias ResultCallback = @convention(c) (
+    Int64,
+    UnsafePointer<CChar>?,
+    UnsafePointer<CChar>?,
+    UnsafePointer<CChar>?
+) -> Void
 
 /// Opens Phantom universal links and returns the custom-scheme callback to Rust.
 @objc(PhantomPlugin)
 public class PhantomPlugin: NSObject {
     private static let scheme = "dioxussolana"
     private static var pendingId: Int64 = 0
+    private static var callback: ResultCallback?
     private static let lock = NSLock()
     private static var hooked = false
 
@@ -23,14 +26,20 @@ public class PhantomPlugin: NSObject {
         PhantomPlugin.install()
     }
 
+    /// `request` is `"<callback address>\n<request id>\n<url>"`. Returns a
+    /// non-empty error message if the request is malformed.
     @objc public func openUrl(_ request: String) -> String {
-        let parts = request.split(separator: "\n", maxSplits: 1)
-        guard parts.count == 2, let requestId = Int64(parts[0]) else {
-            PhantomPlugin.finish(0, status: "err", payload: "", error: "bad phantom request")
-            return ""
+        let parts = request.split(separator: "\n", maxSplits: 2)
+        guard parts.count == 3,
+              let address = UInt(parts[0]),
+              let pointer = UnsafeRawPointer(bitPattern: address),
+              let requestId = Int64(parts[1])
+        else {
+            return "bad phantom request"
         }
-        let url = String(parts[1])
+        let url = String(parts[2])
         PhantomPlugin.lock.lock()
+        PhantomPlugin.callback = unsafeBitCast(pointer, to: ResultCallback.self)
         PhantomPlugin.pendingId = requestId
         PhantomPlugin.lock.unlock()
 
@@ -78,10 +87,14 @@ public class PhantomPlugin: NSObject {
     }
 
     private static func finish(_ id: Int64, status: String, payload: String, error: String) {
+        lock.lock()
+        let callback = callback
+        lock.unlock()
+        guard let callback else { return }
         status.withCString { statusPtr in
             payload.withCString { payloadPtr in
                 error.withCString { errorPtr in
-                    dioxus_solana_phantom_on_result(id, statusPtr, payloadPtr, errorPtr)
+                    callback(id, statusPtr, payloadPtr, errorPtr)
                 }
             }
         }

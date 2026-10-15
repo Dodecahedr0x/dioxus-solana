@@ -3,9 +3,9 @@
 
 use super::{complete, register_wait};
 use dioxus_solana_core::WalletError;
-use jni::objects::{JClass, JString};
-use jni::sys::jlong;
-use jni::JNIEnv;
+use manganis::jni::objects::{GlobalRef, JClass, JObject, JString, JValue};
+use manganis::jni::sys::jlong;
+use manganis::jni::{self as jni, JNIEnv};
 
 #[manganis::ffi("android")]
 extern "Kotlin" {
@@ -32,7 +32,7 @@ pub async fn call(method: &str, args: &[String]) -> Result<String, WalletError> 
 }
 
 fn start(id: u64, method: &str, args: &[String]) -> Result<(), WalletError> {
-    let plugin = MwaPlugin::new().map_err(WalletError::Js)?;
+    let plugin = new_plugin()?;
     let id = id as i64;
     match method {
         "connect" => {
@@ -61,6 +61,51 @@ fn start(id: u64, method: &str, args: &[String]) -> Result<(), WalletError> {
         other => return Err(WalletError::Js(format!("unknown mwa method {other}"))),
     }
     Ok(())
+}
+
+/// Instantiate `MwaPlugin` through the activity's class loader.
+///
+/// The `manganis::ffi`-generated `MwaPlugin::new` uses `FindClass`, which on a
+/// Rust-spawned thread resolves against the system class loader. That cannot
+/// see app classes, and the pending `ClassNotFoundException` aborts the
+/// process when the thread detaches.
+fn new_plugin() -> Result<MwaPlugin, WalletError> {
+    manganis::android::with_activity(|env, activity| {
+        let plugin = load_plugin(env, activity);
+        if env.exception_check().unwrap_or(false) {
+            let _ = env.exception_describe();
+            let _ = env.exception_clear();
+        }
+        Some(plugin.map(MwaPlugin::from_global_ref))
+    })
+    .unwrap_or_else(|| Err(WalletError::Js("no JNI environment".into())))
+}
+
+fn load_plugin(env: &mut JNIEnv, activity: &JObject) -> Result<GlobalRef, WalletError> {
+    let err = |e: jni::errors::Error| WalletError::Js(format!("load MwaPlugin: {e}"));
+    let loader = env
+        .call_method(activity, "getClassLoader", "()Ljava/lang/ClassLoader;", &[])
+        .and_then(|v| v.l())
+        .map_err(err)?;
+    let name = env.new_string("dev.dioxus.solana.MwaPlugin").map_err(err)?;
+    let class: JClass = env
+        .call_method(
+            &loader,
+            "loadClass",
+            "(Ljava/lang/String;)Ljava/lang/Class;",
+            &[JValue::Object(&name)],
+        )
+        .and_then(|v| v.l())
+        .map_err(err)?
+        .into();
+    let plugin = env
+        .new_object(
+            &class,
+            "(Landroid/app/Activity;)V",
+            &[JValue::Object(activity)],
+        )
+        .map_err(err)?;
+    env.new_global_ref(plugin).map_err(err)
 }
 
 #[no_mangle]

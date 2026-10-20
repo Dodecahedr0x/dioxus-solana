@@ -28,10 +28,18 @@ pub fn new_registry(_cluster: Cluster, _identity: Option<AppIdentity>) -> Rc<Reg
     Rc::new(Registry)
 }
 
-/// Run the discovery handshake and snapshot the currently-registered wallets.
+/// Point the registry's wallets at a new cluster.
+#[cfg(any(target_arch = "wasm32", target_os = "android", target_os = "ios"))]
+pub fn set_cluster(registry: &Registry, cluster: Cluster) {
+    registry.set_cluster(cluster);
+}
+
+#[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+pub fn set_cluster(_registry: &Registry, _cluster: Cluster) {}
+
+/// Snapshot the currently-registered wallets.
 #[cfg(target_arch = "wasm32")]
-pub fn run_discovery(registry: &Registry) -> Vec<Rc<dyn Wallet>> {
-    registry.discover();
+pub fn snapshot(registry: &Registry) -> Vec<Rc<dyn Wallet>> {
     registry
         .wallets()
         .into_iter()
@@ -39,9 +47,26 @@ pub fn run_discovery(registry: &Registry) -> Vec<Rc<dyn Wallet>> {
         .collect()
 }
 
+/// Run the discovery handshake and snapshot the currently-registered wallets.
+#[cfg(target_arch = "wasm32")]
+pub fn run_discovery(registry: &Registry) -> Vec<Rc<dyn Wallet>> {
+    registry.discover();
+    snapshot(registry)
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+pub fn snapshot(registry: &Registry) -> Vec<Rc<dyn Wallet>> {
+    registry.wallets()
+}
+
 #[cfg(any(target_os = "android", target_os = "ios"))]
 pub fn run_discovery(registry: &Registry) -> Vec<Rc<dyn Wallet>> {
-    registry.wallets()
+    snapshot(registry)
+}
+
+#[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+pub fn snapshot(_registry: &Registry) -> Vec<Rc<dyn Wallet>> {
+    Vec::new()
 }
 
 #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]

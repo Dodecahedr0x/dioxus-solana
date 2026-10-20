@@ -15,6 +15,10 @@ dioxus.workspace = true
 solana-pubkey.workspace = true
 solana-transaction.workspace = true
 solana-signature.workspace = true
+solana-hash = "4"
+solana-instruction = "3"
+solana-message = "4"
+thiserror.workspace = true
 futures-util = "0.3"
 serde = "1"
 serde_json = "1"
@@ -41,6 +45,8 @@ features = ["server"]
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 dioxus-solana-web.workspace = true
 web-sys = { workspace = true, features = ["Window", "Storage"] }
+gloo-timers = { version = "0.3", features = ["futures"] }
+futures-channel = "0.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 bs58 = "0.5"
@@ -48,7 +54,7 @@ crypto_box = "0.9"
 futures-channel = "0.3"
 solana-rpc-client = { workspace = true }
 solana-rpc-client-api = "4.1"
-tokio = { version = "1", features = ["rt", "macros"] }
+tokio = { version = "1", features = ["rt", "macros", "time"] }
 tokio-tungstenite = { version = "0.28", features = ["connect", "rustls-tls-webpki-roots"] }
 
 [target.'cfg(target_os = "android")'.dependencies]

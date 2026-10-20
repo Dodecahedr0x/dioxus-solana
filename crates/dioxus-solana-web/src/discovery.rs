@@ -7,11 +7,14 @@ use dioxus_solana_core::{AppIdentity, Cluster, Wallet};
 
 use crate::wallet::StandardWallet;
 
+type OnChange = Rc<RefCell<Option<Box<dyn Fn()>>>>;
+
 /// Collects wallets registered through the Wallet Standard window handshake.
 pub struct WalletRegistry {
-    cluster: Cluster,
+    cluster: RefCell<Cluster>,
     identity: Option<AppIdentity>,
     raw: Rc<RefCell<Vec<JsValue>>>,
+    on_change: OnChange,
     _listener: Rc<RefCell<Option<EventListener>>>,
     #[allow(clippy::type_complexity)]
     _register_cb: RefCell<Option<Closure<dyn FnMut(JsValue)>>>,
@@ -24,9 +27,10 @@ impl WalletRegistry {
 
     pub fn new_with_identity(cluster: Cluster, identity: Option<AppIdentity>) -> Self {
         Self {
-            cluster,
+            cluster: RefCell::new(cluster),
             identity,
             raw: Rc::new(RefCell::new(Vec::new())),
+            on_change: Rc::new(RefCell::new(None)),
             _listener: Rc::new(RefCell::new(None)),
             _register_cb: RefCell::new(None),
         }
@@ -37,10 +41,16 @@ impl WalletRegistry {
     /// Returns the object alongside the backing `Closure` so the caller can
     /// keep it alive for as long as the API object may be invoked (instead
     /// of leaking it via `.forget()`).
-    fn make_api(raw: Rc<RefCell<Vec<JsValue>>>) -> (Object, Closure<dyn FnMut(JsValue)>) {
+    fn make_api(
+        raw: Rc<RefCell<Vec<JsValue>>>,
+        on_change: OnChange,
+    ) -> (Object, Closure<dyn FnMut(JsValue)>) {
         let api = Object::new();
         let register = Closure::<dyn FnMut(JsValue)>::new(move |wallet: JsValue| {
             raw.borrow_mut().push(wallet);
+            if let Some(notify) = on_change.borrow().as_ref() {
+                notify();
+            }
         });
         // NOTE: wallets call register(wallet) with a single arg in practice.
         Reflect::set(&api, &"register".into(), register.as_ref().unchecked_ref()).unwrap();
@@ -49,9 +59,9 @@ impl WalletRegistry {
 
     /// Run the handshake: listen for late registrations, then dispatch app-ready.
     pub fn discover(&self) {
-        crate::mwa::register(self.identity.as_ref(), self.cluster.chain_id());
+        crate::mwa::register(self.identity.as_ref(), self.cluster.borrow().chain_id());
         let window = web_sys::window().expect("no window");
-        let (api, cb) = Self::make_api(self.raw.clone());
+        let (api, cb) = Self::make_api(self.raw.clone(), self.on_change.clone());
         *self._register_cb.borrow_mut() = Some(cb);
 
         // 1. Answer any `register-wallet` events (wallet -> app callback).
@@ -75,6 +85,20 @@ impl WalletRegistry {
         let _ = window.dispatch_event(&event);
     }
 
+    /// Call `notify` whenever a wallet registers — including late ones that
+    /// load after [`discover`](Self::discover) — so the caller can re-snapshot
+    /// [`wallets`](Self::wallets).
+    pub fn on_change(&self, notify: impl Fn() + 'static) {
+        *self.on_change.borrow_mut() = Some(Box::new(notify));
+    }
+
+    /// Point wallets at a new cluster. Takes effect for wallets snapshotted
+    /// (and so connected) afterwards; a live session keeps its chain until
+    /// it reconnects.
+    pub fn set_cluster(&self, cluster: Cluster) {
+        *self.cluster.borrow_mut() = cluster;
+    }
+
     /// Snapshot the currently-registered wallets as core `StandardWallet`s.
     ///
     /// A wallet can register twice — once via the `register-wallet` event and
@@ -82,11 +106,12 @@ impl WalletRegistry {
     /// deduplicated by name, keeping the first occurrence.
     pub fn wallets(&self) -> Vec<StandardWallet> {
         let mut seen = std::collections::HashSet::new();
+        let cluster = self.cluster.borrow().clone();
         self.raw
             .borrow()
             .iter()
             .cloned()
-            .map(|raw| StandardWallet::new(raw, self.cluster.clone()))
+            .map(|raw| StandardWallet::new(raw, cluster.clone()))
             .filter(|w| seen.insert(w.info().name.clone()))
             .collect()
     }

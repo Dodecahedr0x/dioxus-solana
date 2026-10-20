@@ -22,6 +22,11 @@ use super::RpcResult;
 
 // --- HTTP ---
 
+/// Async delay on the tokio runtime dioxus mobile runs in.
+pub async fn sleep(duration: std::time::Duration) {
+    tokio::time::sleep(duration).await
+}
+
 #[derive(Clone)]
 pub struct Http(Arc<AgaveClient>);
 

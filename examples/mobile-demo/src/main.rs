@@ -1,14 +1,9 @@
 use dioxus::prelude::*;
-use dioxus_solana::rpc::{use_balance, use_rpc, use_slot_subscription, RpcClient, RpcProvider};
+use dioxus_solana::format::{format_sol, short_address};
+use dioxus_solana::rpc::{use_balance, use_rpc, use_slot_subscription, RpcProvider};
 use dioxus_solana::{
-    serialize_transaction, use_wallet, AppIdentity, Cluster, Pubkey, WalletError, WalletProvider,
-    WalletState,
+    use_wallet, AccountMeta, AppIdentity, Cluster, Instruction, Pubkey, WalletProvider, WalletState,
 };
-use solana_hash::Hash;
-use solana_instruction::{AccountMeta, Instruction};
-use solana_message::{Message, VersionedMessage};
-use solana_signature::Signature;
-use solana_transaction::versioned::VersionedTransaction;
 
 /// SPL Memo program (v2).
 const MEMO_PROGRAM: Pubkey = Pubkey::from_str_const("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
@@ -123,12 +118,12 @@ fn Connected(pubkey: Pubkey) -> Element {
     rsx! {
         div { class: "account",
             span { class: "label", "Connected account" }
-            code { class: "pubkey", "{truncate(&pubkey.to_string())}" }
+            code { class: "pubkey", "{short_address(&pubkey)}" }
             div { class: "meta",
                 span { class: "chip", "{wallet.cluster().chain_id()}" }
                 match balance() {
                     Some(lamports) => rsx! {
-                        span { class: "chip chip-balance", "{lamports_to_sol(lamports)} SOL" }
+                        span { class: "chip chip-balance", "{format_sol(lamports)} SOL" }
                     },
                     None => rsx! { span { class: "chip chip-muted", "… SOL" } },
                 }
@@ -168,42 +163,23 @@ fn Connected(pubkey: Pubkey) -> Element {
             }
             button {
                 class: "btn btn-primary",
-                onclick: {
+                onclick: move |_| {
                     let rpc = rpc.clone();
-                    move |_| {
-                        let rpc = rpc.clone();
-                        spawn(async move {
-                            let text = memo.peek().clone();
-                            if text.is_empty() {
-                                status.set(Some("Enter some memo text".into()));
-                                return;
+                    spawn(async move {
+                        let text = memo.peek().clone();
+                        if text.is_empty() {
+                            status.set(Some("Enter some memo text".into()));
+                            return;
+                        }
+                        status.set(Some("Awaiting wallet…".into()));
+                        match wallet.send_instructions(&rpc, &[memo_ix(pubkey, &text)]).await {
+                            Ok(sig) => {
+                                status.set(Some(format!("Memo sent · {}", short_address(&sig))));
+                                last_sig.set(Some(sig.to_string()));
                             }
-                            status.set(Some("Fetching blockhash…".into()));
-                            let blockhash = match rpc.get_latest_blockhash(None).await {
-                                Ok(resp) => resp.value.blockhash,
-                                Err(e) => {
-                                    status.set(Some(format!("Blockhash failed: {e}")));
-                                    return;
-                                }
-                            };
-                            let Ok(blockhash) = blockhash.parse::<Hash>() else {
-                                status.set(Some("Bad blockhash".into()));
-                                return;
-                            };
-                            let tx = memo_tx(pubkey, &text, blockhash);
-                            status.set(Some("Awaiting wallet…".into()));
-                            match send_memo(&wallet, &rpc, tx).await {
-                                Ok(sig) => {
-                                    status.set(Some(format!(
-                                        "Memo sent · {}",
-                                        truncate(&sig)
-                                    )));
-                                    last_sig.set(Some(sig));
-                                }
-                                Err(e) => status.set(Some(e)),
-                            }
-                        });
-                    }
+                            Err(e) => status.set(Some(format!("Send failed: {e}"))),
+                        }
+                    });
                 },
                 "Send memo"
             }
@@ -215,58 +191,18 @@ fn Connected(pubkey: Pubkey) -> Element {
         if let Some(sig) = last_sig() {
             div { class: "signature",
                 span { class: "label", "Last signature" }
-                code { "{truncate(&sig)}" }
+                code { "{short_address(&sig)}" }
             }
         }
     }
 }
 
-/// Android MWA can sign-and-send; iOS Phantom signs only — then we submit via RPC.
-async fn send_memo(
-    wallet: &dioxus_solana::WalletHandle,
-    rpc: &RpcClient,
-    tx: VersionedTransaction,
-) -> Result<String, String> {
-    match wallet.sign_and_send(tx.clone()).await {
-        Ok(sig) => Ok(sig.to_string()),
-        Err(WalletError::Feature(_)) => {
-            let signed = wallet
-                .sign_transaction(tx)
-                .await
-                .map_err(|e| format!("Sign failed: {e}"))?;
-            let bytes =
-                serialize_transaction(&signed).map_err(|e| format!("Encode failed: {e}"))?;
-            rpc.send_transaction(bs58::encode(bytes).into_string(), None)
-                .await
-                .map_err(|e| format!("Send failed: {e}"))
-        }
-        Err(e) => Err(format!("Send failed: {e}")),
-    }
-}
-
-fn memo_tx(payer: Pubkey, memo: &str, blockhash: Hash) -> VersionedTransaction {
-    let ix = Instruction {
+fn memo_ix(payer: Pubkey, memo: &str) -> Instruction {
+    Instruction {
         program_id: MEMO_PROGRAM,
         accounts: vec![AccountMeta::new_readonly(payer, true)],
         data: memo.as_bytes().to_vec(),
-    };
-    let message = Message::new_with_blockhash(&[ix], Some(&payer), &blockhash);
-    let signatures = vec![Signature::default(); message.header.num_required_signatures as usize];
-    VersionedTransaction {
-        signatures,
-        message: VersionedMessage::Legacy(message),
     }
-}
-
-fn lamports_to_sol(lamports: u64) -> String {
-    format!("{:.4}", lamports as f64 / 1_000_000_000.0)
-}
-
-fn truncate(s: &str) -> String {
-    if s.len() <= 12 {
-        return s.to_string();
-    }
-    format!("{}…{}", &s[..6], &s[s.len() - 6..])
 }
 
 fn initial(name: &str) -> String {

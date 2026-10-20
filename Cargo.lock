@@ -785,14 +785,8 @@ checksum = "6e8ccc4ea9f6acc32d102c0f6d471d11d913ad15f20c04de743374861fa1d414"
 name = "connect-demo"
 version = "0.1.0"
 dependencies = [
- "bs58",
  "dioxus",
  "dioxus-solana",
- "solana-hash",
- "solana-instruction",
- "solana-message",
- "solana-signature",
- "solana-transaction",
 ]
 
 [[package]]
@@ -1758,12 +1752,16 @@ dependencies = [
  "dioxus-solana-web",
  "futures-channel",
  "futures-util",
+ "gloo-timers 0.3.0",
  "manganis",
  "serde",
  "serde_json",
  "solana-account-decoder-client-types",
  "solana-epoch-info",
  "solana-epoch-schedule",
+ "solana-hash",
+ "solana-instruction",
+ "solana-message",
  "solana-pubkey 3.0.0",
  "solana-rpc-client",
  "solana-rpc-client-api",
@@ -1771,6 +1769,7 @@ dependencies = [
  "solana-signature",
  "solana-transaction",
  "solana-transaction-status-client-types",
+ "thiserror 2.0.19",
  "tokio",
  "tokio-tungstenite",
  "wasm-bindgen-test",
@@ -3777,14 +3776,8 @@ dependencies = [
 name = "mobile-demo"
 version = "0.1.0"
 dependencies = [
- "bs58",
  "dioxus",
  "dioxus-solana",
- "solana-hash",
- "solana-instruction",
- "solana-message",
- "solana-signature",
- "solana-transaction",
 ]
 
 [[package]]

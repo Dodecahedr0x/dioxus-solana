@@ -44,7 +44,7 @@ Add the facade crate to your Dioxus app (web, or `mobile` for Android/iOS):
 ```toml
 [dependencies]
 dioxus = { version = "0.7", features = ["web"] }
-dioxus-solana = "0.4"
+dioxus-solana = "0.5"
 ```
 
 Wrap your app in `WalletProvider` once, near the root. To pick the cluster (the chain wallets sign

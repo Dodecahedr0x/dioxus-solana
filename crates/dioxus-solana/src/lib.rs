@@ -18,6 +18,8 @@ compile_error!(
      web app, enable the `server` feature."
 );
 
+mod components;
+pub mod format;
 mod hooks;
 #[allow(dead_code)]
 mod native_mwa;
@@ -27,6 +29,7 @@ mod native_phantom;
 mod platform;
 mod provider;
 mod state;
+mod transaction;
 
 #[cfg(target_os = "android")]
 mod android;
@@ -40,11 +43,17 @@ pub mod storage;
 
 pub use native_mwa::MOBILE_WALLET_NAME;
 
+pub use components::WalletButton;
 pub use dioxus_solana_core::{
     deserialize_transaction, serialize_transaction, AppIdentity, Cluster, ConnectedAccount,
     CustomCluster, Wallet, WalletError, WalletInfo, WalletSigner,
 };
 pub use hooks::{use_wallet, WalletHandle};
 pub use provider::{WalletContext, WalletProvider, WalletProviderProps};
+pub use solana_hash::Hash;
+pub use solana_instruction::{AccountMeta, Instruction};
 pub use solana_pubkey::Pubkey;
+pub use solana_signature::Signature;
+pub use solana_transaction::versioned::{TransactionVersion, VersionedTransaction};
 pub use state::WalletState;
+pub use transaction::{build_transaction, SendError};

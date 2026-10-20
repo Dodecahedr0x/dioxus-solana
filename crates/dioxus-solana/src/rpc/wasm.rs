@@ -9,6 +9,11 @@ use super::RpcResult;
 
 pub use dioxus_solana_web::rpc::Subscription;
 
+/// Async delay on the browser event loop.
+pub async fn sleep(duration: std::time::Duration) {
+    gloo_timers::future::sleep(duration).await
+}
+
 #[derive(Clone)]
 pub struct Http(HttpProvider);
 

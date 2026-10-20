@@ -26,7 +26,7 @@ fn Root() -> Element {
 
 #[component]
 fn Demo() -> Element {
-    use dioxus_solana::rpc::{use_get_version, use_slot_subscription};
+    use dioxus_solana::rpc::{use_get_version, use_slot_subscription, FetchResult};
 
     let wallet = use_wallet();
     let slot = use_slot_subscription();
@@ -108,25 +108,12 @@ fn Demo() -> Element {
             footer { class: "foot",
                 "Powered by "
                 a { href: "https://github.com/Dodecahedr0x/dioxus-solana", "dioxus-solana" }
-                if let Some(v) = version().flatten() {
+                if let Some(v) = version.data() {
                     span { " · node v{v.solana_core}" }
                 }
             }
         }
     }
-}
-
-/// Format lamports as SOL with 4 decimals.
-fn lamports_to_sol(lamports: u64) -> String {
-    format!("{:.4}", lamports as f64 / 1_000_000_000.0)
-}
-
-/// Shorten a base58 string to `head…tail` for display.
-fn truncate(s: &str) -> String {
-    if s.len() <= 12 {
-        return s.to_string();
-    }
-    format!("{}…{}", &s[..6], &s[s.len() - 6..])
 }
 
 /// First character of a wallet name, uppercased, for the icon fallback.

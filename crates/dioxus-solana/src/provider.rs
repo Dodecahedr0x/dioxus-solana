@@ -29,6 +29,36 @@ pub struct WalletProviderProps {
     pub children: Element,
 }
 
+/// Silent reconnect to the last-used wallet, attempted once — as soon as that
+/// wallet has registered (it may load after the app).
+#[cfg(target_arch = "wasm32")]
+struct Autoconnect {
+    remembered: Option<String>,
+    state: Signal<WalletState>,
+}
+
+#[cfg(target_arch = "wasm32")]
+impl Autoconnect {
+    fn try_with(&mut self, found: &[Rc<dyn Wallet>]) {
+        let Some(name) = &self.remembered else { return };
+        let Some(w) = found.iter().find(|w| &w.info().name == name).cloned() else {
+            return;
+        };
+        self.remembered = None;
+        if !matches!(*self.state.peek(), WalletState::Disconnected) {
+            return; // the user already picked a wallet
+        }
+        let mut state = self.state;
+        spawn(async move {
+            state.set(WalletState::Connecting);
+            match w.connect_silent().await {
+                Ok(acc) => state.set(WalletState::Connected(acc)),
+                Err(_) => state.set(WalletState::Disconnected),
+            }
+        });
+    }
+}
+
 /// Provides wallet context to descendants. Mount once near the app root.
 ///
 /// The cluster (which chain wallets sign against) comes from an ancestor
@@ -62,33 +92,76 @@ pub fn WalletProvider(props: WalletProviderProps) -> Element {
     // `new_registry` has no side effects; the handshake runs in the effect.
     let registry = use_hook(|| crate::platform::new_registry(cluster.peek().clone(), identity));
 
+    let discovery = registry.clone();
     // Runs exactly once on mount: the body only writes signals (never reactively
     // reads one), so it is not re-triggered. Do not add a signal read here.
     use_effect(move || {
         let mut wallets = wallets;
-        let found = crate::platform::run_discovery(&registry);
-        wallets.set(found.clone());
-        // v1 limitation: wallets injected AFTER this mount snapshot are held by
-        // the registry but not re-pushed to the signal. Mainstream wallets
-        // register synchronously on app-ready, so this covers the common case.
+        let registry = &discovery;
+        let found = crate::platform::run_discovery(registry);
+        wallets.set(found);
 
         #[cfg(target_arch = "wasm32")]
-        if autoconnect {
-            let mut state = state;
-            if let Some(name) = crate::storage::last_wallet() {
-                if let Some(w) = found.iter().find(|w| w.info().name == name).cloned() {
-                    spawn(async move {
-                        state.set(WalletState::Connecting);
-                        match w.connect_silent().await {
-                            Ok(acc) => state.set(WalletState::Connected(acc)),
-                            Err(_) => state.set(WalletState::Disconnected),
-                        }
-                    });
+        {
+            let remembered = autoconnect.then(crate::storage::last_wallet).flatten();
+            let mut autoconnect = Autoconnect { remembered, state };
+            autoconnect.try_with(&wallets.peek());
+
+            // Wallets that load late register after the handshake; re-snapshot
+            // on each registration. The registry calls back from a JS event, so
+            // hop onto the dioxus runtime through a channel.
+            let (tx, mut rx) = futures_channel::mpsc::unbounded::<()>();
+            registry.on_change(move || {
+                let _ = tx.unbounded_send(());
+            });
+            let registry = registry.clone();
+            spawn(async move {
+                use futures_util::StreamExt;
+                while rx.next().await.is_some() {
+                    let found = crate::platform::snapshot(&registry);
+                    autoconnect.try_with(&found);
+                    wallets.set(found);
                 }
-            }
+            });
         }
         #[cfg(not(target_arch = "wasm32"))]
-        let _ = (autoconnect, &found);
+        let _ = autoconnect;
+    });
+
+    // Follow cluster switches (e.g. a reactive `RpcProvider` cluster): new
+    // connections target the new chain, and a live session is silently
+    // re-established on it so signing requests carry the right chain.
+    let mut applied = use_hook(|| CopyValue::new(cluster.peek().clone()));
+    use_effect(move || {
+        let next = cluster();
+        if *applied.peek() == next {
+            return;
+        }
+        applied.set(next.clone());
+        crate::platform::set_cluster(&registry, next.clone());
+        let found = crate::platform::snapshot(&registry);
+        let mut wallets = wallets;
+        wallets.set(found.clone());
+
+        let name = match &*state.peek() {
+            WalletState::Connected(acc) => acc.wallet_name.clone(),
+            _ => return,
+        };
+        let mut state = state;
+        spawn(async move {
+            let result = match found.iter().find(|w| w.info().name == name) {
+                Some(w) => w.connect_silent().await,
+                None => Err(dioxus_solana_core::WalletError::NotInstalled),
+            };
+            // A newer switch superseded this one; its own reconnect wins.
+            if *applied.peek() != next {
+                return;
+            }
+            match result {
+                Ok(acc) => state.set(WalletState::Connected(acc)),
+                Err(_) => state.set(WalletState::Disconnected),
+            }
+        });
     });
 
     rsx! { {props.children} }

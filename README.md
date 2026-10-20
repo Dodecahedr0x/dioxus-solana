@@ -44,7 +44,7 @@ Add the facade crate to your Dioxus app (web, or `mobile` for Android/iOS):
 ```toml
 [dependencies]
 dioxus = { version = "0.7", features = ["web"] }
-dioxus-solana = "0.4"
+dioxus-solana = "0.5"
 ```
 
 Wrap your app in `WalletProvider` once, near the root. To pick the cluster (the chain wallets sign
@@ -116,27 +116,53 @@ fn App() -> Element {
 - `connect(name)`, `disconnect()` — manage the connection.
 - `sign_message(bytes)`, `sign_transaction(tx)`, `sign_and_send(tx)` — async signing operations
   against the connected wallet.
+- `send_instructions(&rpc, &ixs)`, `send_transaction(&rpc, tx)` — build (fee payer = connected
+  account, fresh blockhash), sign with the wallet and submit through *your* RPC, so the send
+  always targets the app's cluster. Wallets that can only sign-and-send fall back to that. Pair
+  with `rpc.confirm_transaction(&sig)`:
+
+```rust
+let sig = wallet.send_instructions(&rpc, &[transfer_ix]).await?;
+rpc.confirm_transaction(&sig).await?;
+rpc_ctx.invalidate(); // refetch every fetch hook so balances/history catch up
+```
+
+For a ready-made picker, `WalletButton {}` renders connect/disconnect UI (unstyled; target the
+`ds-wallet*` classes). `dioxus_solana::format` has `format_sol`, `parse_sol` and `short_address`.
 
 ## RPC providers and hooks
 
 For live chain data, mount an `RpcProvider` and call the hooks from any descendant. It owns the
 cluster — endpoints *and* the chain wallets sign against — so a nested `WalletProvider` picks the
 same cluster up automatically. Endpoints default to the cluster's public URLs and can be overridden
-with `rpc_url` / `ws_url` props.
+with `rpc_url` / `ws_url` props. The provider is reactive: pass it a signal-driven `cluster` and
+every hook below refetches/resubscribes against the new endpoint, while a connected wallet is
+silently reconnected so its signing requests target the new chain (if the wallet refuses a
+silent reconnect, the state becomes `Disconnected`).
+
+Requests default to `confirmed` commitment (override with the `commitment` prop, or per call in
+the method's config). HTTP 429s are retried with exponential backoff.
 
 The hooks come in three families:
 
-- **Fetch** (`use_get_*`, plus the generic `use_fetch`) do one HTTP request and return a
-  `Resource<Option<T>>` — read it with `res().flatten()`, refetch with `res.restart()`.
-- **Subscription** (`use_*_subscription`, plus the generic `use_subscription`) hold a live
-  WebSocket and return a `ReadSignal<Option<T>>` that updates on each push.
+- **Fetch** (`use_get_*`, plus the generic `use_fetch` / `use_fetch_with`) do one HTTP request
+  and return a `Resource<Result<T, FetchError>>`. The `FetchResult` trait adds `res.data()`
+  (`Option<T>`) and `res.error()` (`Option<FetchError>`), so "loading", "failed" and "empty" stay
+  distinct. Refetch one with `res.restart()`, poll with `use_refresh_every(res, period)`, or
+  refetch all of them with `use_rpc_context().invalidate()` (e.g. after sending a transaction).
+  Hooks re-run when their arguments change between renders.
+- **Subscription** (`use_*_subscription`, plus the generic `use_subscription` /
+  `use_subscription_with`) share one WebSocket per endpoint and return a `ReadSignal<Option<T>>`
+  that updates on each push. Dropped sockets reconnect with backoff.
 - **Live values** (`use_account`, `use_account_data`, `use_balance`) fetch immediately *and*
   subscribe, so a value is on screen at once and then kept current.
 
 ```rust
 use dioxus::prelude::*;
 use dioxus_solana::{Cluster, Pubkey};
-use dioxus_solana::rpc::{RpcProvider, use_slot_subscription, use_balance, use_get_version};
+use dioxus_solana::rpc::{
+    RpcProvider, FetchResult, use_slot_subscription, use_balance, use_get_version,
+};
 
 #[component]
 fn Root() -> Element {
@@ -149,11 +175,12 @@ fn Root() -> Element {
 fn Live(pubkey: Pubkey) -> Element {
     let slot = use_slot_subscription();  // ReadSignal<Option<u64>>  (live)
     let balance = use_balance(pubkey);   // fetched, then kept live
-    let version = use_get_version();     // Resource<Option<RpcVersionInfo>>  (one-shot)
+    let version = use_get_version();     // Resource<Result<RpcVersionInfo, FetchError>>
     rsx! {
         p { "slot: {slot():?}" }
         p { "balance: {balance():?}" }
-        p { "node: {version().flatten().map(|v| v.solana_core):?}" }
+        p { "node: {version.data().map(|v| v.solana_core):?}" }
+        if let Some(err) = version.error() { p { "error: {err}" } }
     }
 }
 
@@ -189,8 +216,14 @@ Available hooks:
   `use_get_signature_statuses`, `use_get_latest_blockhash`, `use_get_fee_for_message`,
   `use_simulate_transaction`), and node/network info (`use_get_health`, `use_get_version`,
   `use_get_epoch_info`, `use_get_cluster_nodes`, `use_get_vote_accounts`, `use_get_inflation_*`, …).
-  The generic `use_fetch` covers anything not wrapped. (Mutating calls — `sendTransaction`,
-  `requestAirdrop` — are intentionally *not* auto-firing hooks; call them via `use_rpc()`.)
+  The generic `use_fetch` covers anything not wrapped; `use_fetch_with(dep, |client, dep| …)`
+  re-runs when `dep` changes. (Mutating calls — `sendTransaction`, `requestAirdrop` — are
+  intentionally *not* auto-firing hooks; call them via `use_rpc()`.)
+- **Accounts:** `use_token_accounts(owner)` lists SPL Token *and* Token-2022 holdings;
+  `use_program_accounts(program, filters, decode)` runs a filtered `getProgramAccounts` and
+  decodes each account (`rpc::filter` has the memcmp/size filter types). The matching
+  `RpcClient` methods (`token_accounts`, `program_accounts`, `program_account_keys`,
+  `account_data`) are available for imperative use.
 - **Subscription:** `use_slot_subscription`, `use_account_subscription`, `use_root_subscription`,
   `use_slot_updates_subscription`, `use_vote_subscription`, `use_logs_subscription`,
   `use_program_subscription`, `use_signature_subscription`, `use_block_subscription`, and the
@@ -208,10 +241,11 @@ See `examples/connect-demo` (web) and `examples/mobile-demo` (Android/iOS) for c
 
 ## What this crate does *not* do
 
-`dioxus-solana` handles wallet discovery/connection/signing and read-only RPC, but does not build
-transactions — assemble those with the modular `solana-*` crates (`solana-transaction`,
-`solana-message`, etc.), then hand the `VersionedTransaction` to the wallet to be signed (and
-optionally sent).
+`dioxus-solana` builds simple transactions from instructions (`build_transaction`,
+`send_instructions`) but does not construct program instructions for you — use the program's
+own crate (or `Instruction`/`AccountMeta`, re-exported here) for those. Address lookup tables,
+priority fees and partial signing are left to the modular `solana-*` crates; hand the resulting
+`VersionedTransaction` to `wallet.send_transaction`.
 
 ## Platform support
 

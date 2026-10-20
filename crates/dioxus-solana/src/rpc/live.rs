@@ -1,33 +1,81 @@
 //! Live-value hooks — fetch immediately, then keep current via a subscription.
 
+use std::cell::Cell;
+use std::future::Future;
+
 use dioxus::prelude::*;
+use futures_util::future::join;
+use serde::de::DeserializeOwned;
 use solana_pubkey::Pubkey;
 
 use super::base64_account_config;
 use super::response::*;
+use super::subscription::{clear, pump};
+use super::{use_dep, PubsubClient, RpcClient, RpcContext, Subscription};
 
-use super::subscription::{subscribe_mapped, use_account_subscription};
-use super::use_rpc;
-
-/// Live account: fetched immediately (`getAccountInfo`), then kept current via
-/// `accountSubscribe`.
-pub fn use_account(pubkey: Pubkey) -> ReadSignal<Option<UiAccount>> {
-    let subscribed = use_account_subscription(pubkey);
-    let rpc = use_rpc();
-    let mut fetched = use_signal(|| None::<UiAccount>);
-
-    use_future(move || {
-        let rpc = rpc.clone();
+/// Fetch a value and subscribe to its updates concurrently, keeping whichever
+/// observation is from the newest slot (so a slow fetch never overwrites a
+/// fresher push). `fetch` and `map` return `(context slot, value)`.
+///
+/// Restarts — clearing the value — when `dep` or the cluster changes.
+fn use_live<D, T, U, E, FF, FFut, SF, SFut, M>(
+    dep: D,
+    fetch: FF,
+    subscribe: SF,
+    map: M,
+) -> ReadSignal<Option<U>>
+where
+    D: Clone + PartialEq + 'static,
+    T: DeserializeOwned + 'static,
+    U: 'static,
+    E: 'static,
+    FF: Fn(RpcClient, D) -> FFut + Clone + 'static,
+    FFut: Future<Output = Option<(u64, U)>> + 'static,
+    SF: Fn(PubsubClient, D) -> SFut + Clone + 'static,
+    SFut: Future<Output = Result<Subscription<T>, E>> + 'static,
+    M: Fn(T) -> Option<(u64, U)> + Clone + 'static,
+{
+    let ctx = use_context::<RpcContext>();
+    let dep = use_dep(dep);
+    let value = use_signal(|| Option::<U>::None);
+    use_resource(move || {
+        let client = ctx.client();
+        let dep = dep();
+        let (fetch, subscribe, map) = (fetch.clone(), subscribe.clone(), map.clone());
         async move {
-            if let Ok(resp) = rpc.get_account_info(pubkey.to_string(), None).await {
-                if let Some(acc) = resp.value {
-                    fetched.set(Some(acc));
+            clear(value);
+            let newest = Cell::new(0u64);
+            let accept = |(slot, u): (u64, U)| {
+                if slot >= newest.get() {
+                    newest.set(slot);
+                    let mut value = value;
+                    value.set(Some(u));
                 }
-            }
+            };
+            let fetched = async {
+                if let Some(observation) = fetch(client, dep.clone()).await {
+                    accept(observation);
+                }
+            };
+            let pushed = pump(ctx, |c| subscribe(c, dep.clone()), map, accept);
+            join(fetched, pushed).await;
         }
     });
+    value.into()
+}
 
-    use_memo(move || subscribed().or(fetched())).into()
+/// Live account: fetched immediately (`getAccountInfo`), then kept current via
+/// `accountSubscribe`. Follows `pubkey` and the cluster as they change.
+pub fn use_account(pubkey: Pubkey) -> ReadSignal<Option<UiAccount>> {
+    use_live(
+        pubkey,
+        |c, pubkey| async move {
+            let resp = c.get_account_info(pubkey, None).await.ok()?;
+            Some((resp.context.slot, resp.value?))
+        },
+        |c, pubkey| async move { c.account_subscribe(pubkey, None).await },
+        |resp: Response<Option<UiAccount>>| Some((resp.context.slot, resp.value?)),
+    )
 }
 
 /// Live, decoded account data: fetched immediately, kept current via
@@ -41,63 +89,48 @@ pub fn use_account(pubkey: Pubkey) -> ReadSignal<Option<UiAccount>> {
 /// ```
 pub fn use_account_data<T, D>(pubkey: Pubkey, decode: D) -> ReadSignal<Option<T>>
 where
-    T: Clone + PartialEq + 'static,
+    T: 'static,
     D: Fn(&[u8]) -> Option<T> + Clone + 'static,
 {
-    let subscribed = {
-        let decode = decode.clone();
-        subscribe_mapped(
-            move |c| async move {
-                c.account_subscribe(pubkey.to_string(), Some(base64_account_config()))
+    let decode_fetched = decode.clone();
+    use_live(
+        pubkey,
+        move |c, pubkey| {
+            let decode = decode_fetched.clone();
+            async move {
+                let resp = c
+                    .get_account_info(pubkey, Some(base64_account_config()))
                     .await
-            },
-            move |resp: Response<Option<UiAccount>>| {
-                resp.value
-                    .and_then(|ui| ui.data.decode())
-                    .and_then(|b| decode(&b))
-            },
-        )
-    };
-
-    let rpc = use_rpc();
-    let mut fetched = use_signal(|| None::<T>);
-    use_future(move || {
-        let rpc = rpc.clone();
-        let decode = decode.clone();
-        async move {
-            if let Ok(resp) = rpc
-                .get_account_info(pubkey.to_string(), Some(base64_account_config()))
-                .await
-            {
-                if let Some(t) = resp
-                    .value
-                    .and_then(|ui| ui.data.decode())
-                    .and_then(|b| decode(&b))
-                {
-                    fetched.set(Some(t));
-                }
+                    .ok()?;
+                let bytes = resp.value?.data.decode()?;
+                Some((resp.context.slot, decode(&bytes)?))
             }
-        }
-    });
-
-    use_memo(move || subscribed().or(fetched())).into()
+        },
+        |c, pubkey| async move {
+            c.account_subscribe(pubkey, Some(base64_account_config()))
+                .await
+        },
+        move |resp: Response<Option<UiAccount>>| {
+            let bytes = resp.value?.data.decode()?;
+            Some((resp.context.slot, decode(&bytes)?))
+        },
+    )
 }
 
 /// Lamport balance of `pubkey`: fetched immediately (`getBalance`), then kept
-/// current via `accountSubscribe`.
+/// current via `accountSubscribe`. Follows `pubkey` and the cluster as they
+/// change.
 pub fn use_balance(pubkey: Pubkey) -> ReadSignal<Option<u64>> {
-    let account = use_account_subscription(pubkey);
-    let rpc = use_rpc();
-    let mut fetched = use_signal(|| Option::<u64>::None);
-
-    use_future(move || {
-        let rpc = rpc.clone();
-        async move {
-            if let Ok(resp) = rpc.get_balance(pubkey.to_string(), None).await {
-                fetched.set(Some(resp.value));
-            }
-        }
-    });
-
-    use_memo(move || account().map(|a| a.lamports).or(fetched())).into()
+    use_live(
+        pubkey,
+        |c, pubkey| async move {
+            let resp = c.get_balance(pubkey, None).await.ok()?;
+            Some((resp.context.slot, resp.value))
+        },
+        |c, pubkey| async move { c.account_subscribe(pubkey, None).await },
+        |resp: Response<Option<UiAccount>>| {
+            // A closed account pushes `null`: its balance is zero.
+            Some((resp.context.slot, resp.value.map_or(0, |a| a.lamports)))
+        },
+    )
 }

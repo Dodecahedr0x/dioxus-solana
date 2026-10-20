@@ -15,18 +15,26 @@ use std::sync::{Mutex, OnceLock};
 mod plugin;
 
 pub struct MwaRegistry {
-    cluster: Cluster,
+    cluster: std::cell::RefCell<Cluster>,
     identity: Option<AppIdentity>,
 }
 
 impl MwaRegistry {
     pub fn new(cluster: Cluster, identity: Option<AppIdentity>) -> Self {
-        Self { cluster, identity }
+        Self {
+            cluster: std::cell::RefCell::new(cluster),
+            identity,
+        }
+    }
+
+    /// Wallets snapshotted afterwards connect against `cluster`.
+    pub fn set_cluster(&self, cluster: Cluster) {
+        *self.cluster.borrow_mut() = cluster;
     }
 
     pub fn wallets(&self) -> Vec<Rc<dyn Wallet>> {
         vec![Rc::new(MwaWallet {
-            cluster: self.cluster.clone(),
+            cluster: self.cluster.borrow().clone(),
             identity: self.identity.clone(),
             info: wallet_info(),
         })]

@@ -1,30 +1,16 @@
 use dioxus::prelude::*;
-use dioxus_solana::{use_wallet, Pubkey};
-
-use crate::truncate;
-
-use solana_hash::Hash;
-use solana_instruction::{AccountMeta, Instruction};
-use solana_message::{Message, VersionedMessage};
-use solana_signature::Signature;
-use solana_transaction::versioned::VersionedTransaction;
+use dioxus_solana::format::{format_sol, short_address};
+use dioxus_solana::{use_wallet, AccountMeta, Instruction, Pubkey};
 
 /// SPL Memo program (v2).
 const MEMO_PROGRAM: Pubkey = Pubkey::from_str_const("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 
-/// Build an unsigned legacy transaction with a single Memo instruction.
-/// The wallet fills in the signature when it signs-and-sends.
-fn memo_tx(payer: Pubkey, memo: &str, blockhash: Hash) -> VersionedTransaction {
-    let ix = Instruction {
+/// A single Memo instruction signed by `payer`.
+fn memo_ix(payer: Pubkey, memo: &str) -> Instruction {
+    Instruction {
         program_id: MEMO_PROGRAM,
         accounts: vec![AccountMeta::new_readonly(payer, true)],
         data: memo.as_bytes().to_vec(),
-    };
-    let message = Message::new_with_blockhash(&[ix], Some(&payer), &blockhash);
-    let signatures = vec![Signature::default(); message.header.num_required_signatures as usize];
-    VersionedTransaction {
-        signatures,
-        message: VersionedMessage::Legacy(message),
     }
 }
 
@@ -33,9 +19,6 @@ fn memo_tx(payer: Pubkey, memo: &str, blockhash: Hash) -> VersionedTransaction {
 #[component]
 pub fn Connected(pubkey: Pubkey) -> Element {
     use dioxus_solana::rpc::{use_account, use_balance, use_rpc};
-    use dioxus_solana::serialize_transaction;
-
-    use crate::lamports_to_sol;
 
     let wallet = use_wallet();
     let rpc = use_rpc();
@@ -46,17 +29,17 @@ pub fn Connected(pubkey: Pubkey) -> Element {
     let mut memo = use_signal(|| "gm from dioxus-solana".to_string());
     let mut memo_status = use_signal(|| Option::<String>::None);
 
-    let owner = account().map(|a| truncate(&a.owner));
+    let owner = account().map(|a| short_address(&a.owner));
 
     rsx! {
         div { class: "account",
             span { class: "label", "Connected account" }
-            code { class: "pubkey", "{truncate(&pubkey.to_string())}" }
+            code { class: "pubkey", "{short_address(&pubkey)}" }
             div { class: "meta",
                 span { class: "chip", "{wallet.cluster().chain_id()}" }
                 match balance() {
                     Some(lamports) => rsx! {
-                        span { class: "chip chip-balance", "{lamports_to_sol(lamports)} SOL" }
+                        span { class: "chip chip-balance", "{format_sol(lamports)} SOL" }
                     },
                     None => rsx! { span { class: "chip chip-muted", "… SOL" } },
                 }
@@ -86,7 +69,7 @@ pub fn Connected(pubkey: Pubkey) -> Element {
                         async move {
                             airdrop.set(Some("Requesting 1 SOL…".into()));
                             match rpc.request_airdrop(pubkey.to_string(), 1_000_000_000, None).await {
-                                Ok(sig) => airdrop.set(Some(format!("Airdropped · {}", truncate(&sig)))),
+                                Ok(sig) => airdrop.set(Some(format!("Airdropped · {}", short_address(&sig)))),
                                 Err(e) => airdrop.set(Some(format!("Airdrop failed: {e}"))),
                             }
                         }
@@ -121,42 +104,11 @@ pub fn Connected(pubkey: Pubkey) -> Element {
                                 memo_status.set(Some("Enter some memo text".into()));
                                 return;
                             }
-                            memo_status.set(Some("Fetching blockhash…".into()));
-                            let blockhash = match rpc.get_latest_blockhash(None).await {
-                                Ok(resp) => resp.value.blockhash,
-                                Err(e) => {
-                                    memo_status.set(Some(format!("Blockhash failed: {e}")));
-                                    return;
-                                }
-                            };
-                            let Ok(blockhash) = blockhash.parse::<Hash>() else {
-                                memo_status.set(Some("Bad blockhash".into()));
-                                return;
-                            };
-                            let tx = memo_tx(pubkey, &text, blockhash);
-
-                            // Sign with the wallet, then submit through our own RPC — so the
-                            // send targets the same cluster the blockhash came from. Relying on
-                            // the wallet's sign-and-send can hit "invalid blockhash" when the
-                            // extension is pointed at a different cluster.
+                            // Signed by the wallet, then submitted through our own RPC, so the
+                            // send targets the same cluster the blockhash came from.
                             memo_status.set(Some("Awaiting signature…".into()));
-                            let signed = match wallet.sign_transaction(tx).await {
-                                Ok(t) => t,
-                                Err(e) => {
-                                    memo_status.set(Some(format!("Sign failed: {e}")));
-                                    return;
-                                }
-                            };
-                            let bytes = match serialize_transaction(&signed) {
-                                Ok(b) => b,
-                                Err(e) => {
-                                    memo_status.set(Some(format!("Encode failed: {e}")));
-                                    return;
-                                }
-                            };
-                            memo_status.set(Some("Sending…".into()));
-                            match rpc.send_transaction(bs58::encode(bytes).into_string(), None).await {
-                                Ok(sig) => memo_status.set(Some(format!("Memo sent · {}", truncate(&sig)))),
+                            match wallet.send_instructions(&rpc, &[memo_ix(pubkey, &text)]).await {
+                                Ok(sig) => memo_status.set(Some(format!("Memo sent · {}", short_address(&sig)))),
                                 Err(e) => memo_status.set(Some(format!("Send failed: {e}"))),
                             }
                         }
@@ -175,7 +127,7 @@ pub fn Connected(pubkey: Pubkey) -> Element {
         if let Some(sig) = last_sig() {
             div { class: "signature",
                 span { class: "label", "Signature" }
-                code { "{truncate(&sig)}" }
+                code { "{short_address(&sig)}" }
             }
         }
     }

@@ -22,6 +22,31 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
+      # The idempotent publish below skips versions already on crates.io, so a
+      # release tagged without bumping Cargo.toml would "succeed" while
+      # publishing nothing. Fail instead when the tag and crate versions differ.
+      # Manual runs have no release tag and skip this check.
+      - name: Check tag matches crate versions
+        if: github.event_name == 'release'
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          expected="${TAG#v}"
+          versions=$(cargo metadata --no-deps --format-version 1 --locked | jq -r '
+            .packages[]
+            | select(.name | IN("dioxus-solana-core", "dioxus-solana-web", "dioxus-solana"))
+            | "\(.name) \(.version)"')
+          echo "$versions"
+          if [ "$(wc -l <<<"$versions")" -ne 3 ]; then
+            echo "::error::expected 3 publishable crates, found:"; echo "$versions"; exit 1
+          fi
+          if mismatched=$(awk -v want="$expected" '$2 != want' <<<"$versions") && [ -n "$mismatched" ]; then
+            echo "::error::release tag $TAG does not match crate versions:"
+            echo "$mismatched"
+            exit 1
+          fi
+
       # Verify against the committed Cargo.lock, which pins the solana crates to
       # their wincode-0.5 releases. `cargo publish`'s own verification does a
       # fresh resolve that would pick the incompatible wincode-0.6 versions, so

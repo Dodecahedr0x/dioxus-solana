@@ -1741,7 +1741,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-solana"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "async-trait",
  "base64",
@@ -1778,7 +1778,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-solana-core"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "async-trait",
  "bincode",
@@ -1791,7 +1791,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-solana-web"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "async-trait",
  "dioxus-solana-core",

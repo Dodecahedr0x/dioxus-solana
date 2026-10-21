@@ -6,7 +6,7 @@ members = ["crates/*", "examples/*"]
 version = "0.5.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/aursen-labs/dioxus-solana"
+repository = "https://github.com/Dodecahedr0x/dioxus-solana"
 
 [workspace.dependencies]
 # Solana modular crates — floor at v3, no strict pin (cargo resolves 4.x)

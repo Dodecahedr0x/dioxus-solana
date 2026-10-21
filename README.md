@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/aursen-labs/dioxus-solana/master/assets/logo.png" alt="dioxus-solana logo" width="160" />
+<img src="https://raw.githubusercontent.com/Dodecahedr0x/dioxus-solana/master/assets/logo.png" alt="dioxus-solana logo" width="160" />
 
 # dioxus-solana
 
@@ -309,8 +309,8 @@ The identity `icon` must be a **relative** path (for example `favicon.ico`), res
 
 | Example | Platforms | What it shows |
 | --- | --- | --- |
-| [`connect-demo`](https://github.com/aursen-labs/dioxus-solana/tree/master/examples/connect-demo) | Web | connect / sign-message / disconnect, a devnet airdrop, an on-chain **memo transaction** (`sign_and_send`), a live slot subscription and a live balance |
-| [`mobile-demo`](https://github.com/aursen-labs/dioxus-solana/tree/master/examples/mobile-demo) | Android, iOS, Web | one cross-platform app: connect a wallet (MWA / Phantom / browser extension), live slot and balance, sign a message, send an on-chain memo (`signAndSend` where supported, otherwise sign + RPC submit) |
+| [`connect-demo`](https://github.com/Dodecahedr0x/dioxus-solana/tree/master/examples/connect-demo) | Web | connect / sign-message / disconnect, a devnet airdrop, an on-chain **memo transaction** (`sign_and_send`), a live slot subscription and a live balance |
+| [`mobile-demo`](https://github.com/Dodecahedr0x/dioxus-solana/tree/master/examples/mobile-demo) | Android, iOS, Web | one cross-platform app: connect a wallet (MWA / Phantom / browser extension), live slot and balance, sign a message, send an on-chain memo (`signAndSend` where supported, otherwise sign + RPC submit) |
 
 ```bash
 dx serve --package connect-demo
